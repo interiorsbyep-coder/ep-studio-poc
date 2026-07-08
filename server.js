@@ -6,8 +6,12 @@
 // Run locally with:  npm install && node server.js
 // Deploy: see DEPLOY.md
 
+require('dotenv').config();
 const express = require('express');
 const path = require('path');
+const { router: projectsRouter } = require('./routes/projects');
+const scheduleRouter = require('./routes/schedule');
+const aiRouter = require('./routes/ai');
 
 const app = express();
 app.use(express.json());
@@ -19,6 +23,10 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 if (!ANTHROPIC_API_KEY) {
   console.warn('WARNING: ANTHROPIC_API_KEY is not set. The /api/search endpoint will fail until it is.');
 }
+
+app.use('/api/projects', projectsRouter);
+app.use('/api', scheduleRouter);
+app.use('/api/ai', aiRouter);
 
 // The frontend calls THIS endpoint instead of api.anthropic.com directly.
 // The real API key lives only here, server-side — never sent to the browser.
@@ -69,6 +77,13 @@ Return ONLY a single valid minified JSON object, no markdown fences, no commenta
   }
 });
 
+// Catches rejected promises from async route handlers (Express 4 doesn't do this itself)
+// so a DB error returns a clean 500 instead of hanging the request.
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).json({ error: err.message || 'Internal server error.' });
+});
+
 app.listen(PORT, () => {
-  console.log(`Proof-of-concept server running on port ${PORT}`);
+  console.log(`Studio Suite server running on port ${PORT}`);
 });

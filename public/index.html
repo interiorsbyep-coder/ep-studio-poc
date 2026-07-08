@@ -2,91 +2,91 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<title>Studio Suite — Real Server Test</title>
-<style>
-  body{font-family:Arial,sans-serif;max-width:640px;margin:60px auto;padding:0 20px;color:#333;}
-  h1{font-size:22px;}
-  p.sub{color:#666;font-size:14px;}
-  input{width:100%;padding:10px;font-size:14px;border:1px solid #ccc;border-radius:4px;margin-bottom:10px;box-sizing:border-box;}
-  button{padding:10px 20px;background:#9E8E3D;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:14px;}
-  button:disabled{opacity:.5;}
-  #result{margin-top:24px;border:1px solid #ddd;border-radius:6px;padding:16px;display:none;}
-  #result img{max-width:100%;border-radius:4px;margin-top:10px;display:block;}
-  #status{font-family:monospace;font-size:12px;color:#666;margin-top:10px;}
-  .error{color:#a33;}
-</style>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>E.P. Interiors — Studio Suite</title>
+<link rel="stylesheet" href="/styles.css"/>
 </head>
 <body>
-  <h1>Studio Suite — Real Server Test</h1>
-  <p class="sub">This is a bare-bones test, not the real tool. It exists to answer one question: does a product image actually load when this runs outside Claude's sandbox?</p>
 
-  <input id="query" placeholder='e.g. "swivel glider chair under $3000"' value="swivel glider chair under $3000"/>
-  <button id="go">Search &amp; test image</button>
-  <div id="status"></div>
+<div class="app-header">
+  <img src="/assets/crest.png" alt="E.P. Interiors crest"/>
+  <div class="app-header-name">E.P. Interiors &nbsp;&middot;&nbsp; Thoughtful Spaces, Intentional Living</div>
+</div>
 
-  <div style="margin-top:24px;padding:16px;border:1px dashed #ccc;border-radius:6px;">
-    <b>Direct image test (no AI involved)</b>
-    <p style="font-size:13px;color:#666;margin:6px 0;">This loads a fixed, known-good image with no search involved — the cleanest possible test of whether images work at all on this server.</p>
-    <img src="https://picsum.photos/300/200" style="max-width:200px;border:1px solid #ddd;border-radius:4px;display:block;"/>
+<nav class="app-tabs">
+  <button class="app-tab active" data-tab="schedule-builder">Schedule Builder</button>
+  <button class="app-tab" disabled title="Coming soon">Sourcing Specialist</button>
+  <button class="app-tab" disabled title="Coming soon">Tear Sheet Builder</button>
+  <button class="app-tab" disabled title="Coming soon">Quality Checker</button>
+  <button class="app-tab" disabled title="Coming soon">Order Tracker</button>
+  <button class="app-tab" disabled title="Coming soon">Invoice Creator</button>
+  <button class="app-tab" disabled title="Coming soon">Purchase Orders</button>
+  <button class="app-tab" disabled title="Coming soon">Income &amp; Expense</button>
+</nav>
+
+<main class="app-main">
+  <div class="sb-root" id="sb-root">
+    <div class="sb-eyebrow">FF&amp;E Schedule Builder</div>
+    <div class="sb-title">Your Schedule, Drafted</div>
+    <div class="sb-sub">Paste a messy product list, notes, or URLs below and it lands here as a clean, editable line-item schedule — or add rooms and items by hand.</div>
+
+    <div class="sb-meta">
+      <span>PROJECT</span>
+      <select id="sb-project-select"></select>
+      <button class="sb-btn sb-btn-ghost sb-btn-sm" id="sb-project-new" type="button">+ New</button>
+      <button class="sb-btn sb-btn-ghost sb-btn-sm" id="sb-project-rename" type="button">Rename</button>
+      <button class="sb-btn sb-btn-ghost sb-btn-sm" id="sb-project-delete" type="button">Delete</button>
+      <span>DATE</span>
+      <input id="sb-date" size="12" readonly/>
+    </div>
+    <div class="sb-inline-form" id="sb-project-form" style="display:none;">
+      <input type="text" id="sb-project-form-input" placeholder="Project name"/>
+      <button class="sb-btn sb-btn-sm" id="sb-project-form-save" type="button">Save</button>
+      <button class="sb-btn sb-btn-ghost sb-btn-sm" id="sb-project-form-cancel" type="button">Cancel</button>
+    </div>
+    <div class="sb-inline-form sb-inline-danger" id="sb-project-delete-confirm" style="display:none;">
+      <span>Delete "<b id="sb-project-delete-name"></b>"? This can't be undone.</span>
+      <button class="sb-btn sb-btn-sm" id="sb-project-delete-yes" type="button" style="background:var(--danger);border-color:var(--danger);">Delete</button>
+      <button class="sb-btn sb-btn-ghost sb-btn-sm" id="sb-project-delete-no" type="button">Cancel</button>
+    </div>
+
+    <div class="sb-panel">
+      <div class="sb-panel-label">Build from notes</div>
+      <textarea id="sb-input" placeholder="e.g. Living room needs a curved sofa, two swivel chairs from Verellen, a round coffee table in walnut, a jute area rug, brass floor lamp — client wants kid-friendly performance fabric throughout..."></textarea>
+      <div class="sb-panel-actions">
+        <button class="sb-btn" id="sb-generate">Generate schedule</button>
+        <button class="sb-btn sb-btn-ghost" id="sb-add-room">+ Add room</button>
+        <span class="sb-loading" id="sb-loading" style="display:none;">Drafting your schedule…</span>
+      </div>
+      <div class="sb-error" id="sb-error" style="display:none;"></div>
+    </div>
+
+    <div class="sb-panel">
+      <div class="sb-panel-label">Quick add from a link</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <input type="text" id="sb-clip-url" placeholder="Paste a product URL…" style="flex:2;min-width:220px;font-family:'Montserrat',sans-serif;font-size:13px;border:1px solid var(--border);border-radius:3px;padding:9px 12px;background:#fff;color:var(--text);"/>
+        <input type="text" id="sb-clip-room" placeholder="Room (optional)" style="flex:1;min-width:140px;font-family:'Montserrat',sans-serif;font-size:13px;border:1px solid var(--border);border-radius:3px;padding:9px 12px;background:#fff;color:var(--text);"/>
+        <button class="sb-btn" id="sb-clip">Add to schedule</button>
+      </div>
+      <span class="sb-loading" id="sb-clip-loading" style="display:none;">Fetching product details…</span>
+      <div class="sb-error" id="sb-clip-error" style="display:none;"></div>
+    </div>
+
+    <div id="sb-rooms"></div>
+    <div class="sb-empty" id="sb-empty">No items yet — paste your notes above, add a link, or add a room to start drafting.</div>
+
+    <div class="sb-footer">
+      <div class="sb-totals">
+        <span>ROOMS <b id="sb-count-rooms">0</b></span>
+        <span>ITEMS <b id="sb-count-items">0</b></span>
+        <span>CLIENT TOTAL <b id="sb-count-total">$0</b></span>
+      </div>
+      <span class="sb-loading" id="sb-save-status" style="display:none;"></span>
+      <button class="sb-btn sb-btn-ghost" id="sb-export">Export CSV</button>
+    </div>
   </div>
+</main>
 
-  <div id="result">
-    <div><b id="r-name"></b></div>
-    <div id="r-vendor" style="color:#666;font-size:13px;"></div>
-    <div id="r-price"></div>
-    <a id="r-url" target="_blank">View product page</a>
-    <img id="r-img" style="display:none;"/>
-    <div id="r-imgurl" style="font-family:monospace;font-size:11px;color:#999;margin-top:6px;word-break:break-all;user-select:all;"></div>
-    <div id="r-noimg" style="display:none;color:#999;font-size:13px;margin-top:10px;">No image URL was found for this result.</div>
-  </div>
-
-<script>
-document.getElementById('go').addEventListener('click', async () => {
-  const btn = document.getElementById('go');
-  const status = document.getElementById('status');
-  const result = document.getElementById('result');
-  btn.disabled = true;
-  status.textContent = 'Searching…';
-  result.style.display = 'none';
-
-  try {
-    const res = await fetch('/api/search', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ query: document.getElementById('query').value })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Request failed');
-
-    const p = data.result;
-    document.getElementById('r-name').textContent = p.name || '(no name)';
-    document.getElementById('r-vendor').textContent = p.vendor || '';
-    document.getElementById('r-price').textContent = p.price || '';
-    document.getElementById('r-url').href = p.url || '#';
-
-    const img = document.getElementById('r-img');
-    const noimg = document.getElementById('r-noimg');
-    const imgurl = document.getElementById('r-imgurl');
-    imgurl.textContent = p.imageUrl ? ('Image URL: ' + p.imageUrl) : '';
-    if (p.imageUrl) {
-      img.src = p.imageUrl;
-      img.style.display = 'block';
-      noimg.style.display = 'none';
-    } else {
-      img.style.display = 'none';
-      noimg.style.display = 'block';
-    }
-
-    result.style.display = 'block';
-    status.textContent = data.usage
-      ? `Done. Tokens used — input: ${data.usage.input_tokens}, output: ${data.usage.output_tokens}`
-      : 'Done.';
-  } catch (err) {
-    status.innerHTML = '<span class="error">Error: ' + err.message + '</span>';
-  } finally {
-    btn.disabled = false;
-  }
-});
-</script>
+<script src="/js/schedule-builder.js"></script>
 </body>
 </html>

@@ -30,6 +30,7 @@
     <div id="r-price"></div>
     <a id="r-url" target="_blank">View product page</a>
     <img id="r-img" style="display:none;"/>
+    <div id="r-imgurl" style="font-family:monospace;font-size:11px;color:#999;margin-top:6px;word-break:break-all;user-select:all;"></div>
     <div id="r-noimg" style="display:none;color:#999;font-size:13px;margin-top:10px;">No image URL was found for this result.</div>
   </div>
 
@@ -59,6 +60,8 @@ document.getElementById('go').addEventListener('click', async () => {
 
     const img = document.getElementById('r-img');
     const noimg = document.getElementById('r-noimg');
+    const imgurl = document.getElementById('r-imgurl');
+    imgurl.textContent = p.imageUrl ? ('Image URL: ' + p.imageUrl) : '';
     if (p.imageUrl) {
       img.src = p.imageUrl;
       img.style.display = 'block';

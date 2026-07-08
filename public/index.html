@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Studio Suite — Real Server Test</title>
+<style>
+  body{font-family:Arial,sans-serif;max-width:640px;margin:60px auto;padding:0 20px;color:#333;}
+  h1{font-size:22px;}
+  p.sub{color:#666;font-size:14px;}
+  input{width:100%;padding:10px;font-size:14px;border:1px solid #ccc;border-radius:4px;margin-bottom:10px;box-sizing:border-box;}
+  button{padding:10px 20px;background:#9E8E3D;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:14px;}
+  button:disabled{opacity:.5;}
+  #result{margin-top:24px;border:1px solid #ddd;border-radius:6px;padding:16px;display:none;}
+  #result img{max-width:100%;border-radius:4px;margin-top:10px;display:block;}
+  #status{font-family:monospace;font-size:12px;color:#666;margin-top:10px;}
+  .error{color:#a33;}
+</style>
+</head>
+<body>
+  <h1>Studio Suite — Real Server Test</h1>
+  <p class="sub">This is a bare-bones test, not the real tool. It exists to answer one question: does a product image actually load when this runs outside Claude's sandbox?</p>
+
+  <input id="query" placeholder='e.g. "swivel glider chair under $3000"' value="swivel glider chair under $3000"/>
+  <button id="go">Search &amp; test image</button>
+  <div id="status"></div>
+
+  <div id="result">
+    <div><b id="r-name"></b></div>
+    <div id="r-vendor" style="color:#666;font-size:13px;"></div>
+    <div id="r-price"></div>
+    <a id="r-url" target="_blank">View product page</a>
+    <img id="r-img" style="display:none;"/>
+    <div id="r-noimg" style="display:none;color:#999;font-size:13px;margin-top:10px;">No image URL was found for this result.</div>
+  </div>
+
+<script>
+document.getElementById('go').addEventListener('click', async () => {
+  const btn = document.getElementById('go');
+  const status = document.getElementById('status');
+  const result = document.getElementById('result');
+  btn.disabled = true;
+  status.textContent = 'Searching…';
+  result.style.display = 'none';
+
+  try {
+    const res = await fetch('/api/search', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ query: document.getElementById('query').value })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+
+    const p = data.result;
+    document.getElementById('r-name').textContent = p.name || '(no name)';
+    document.getElementById('r-vendor').textContent = p.vendor || '';
+    document.getElementById('r-price').textContent = p.price || '';
+    document.getElementById('r-url').href = p.url || '#';
+
+    const img = document.getElementById('r-img');
+    const noimg = document.getElementById('r-noimg');
+    if (p.imageUrl) {
+      img.src = p.imageUrl;
+      img.style.display = 'block';
+      noimg.style.display = 'none';
+    } else {
+      img.style.display = 'none';
+      noimg.style.display = 'block';
+    }
+
+    result.style.display = 'block';
+    status.textContent = data.usage
+      ? `Done. Tokens used — input: ${data.usage.input_tokens}, output: ${data.usage.output_tokens}`
+      : 'Done.';
+  } catch (err) {
+    status.innerHTML = '<span class="error">Error: ' + err.message + '</span>';
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

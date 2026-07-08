@@ -1,0 +1,15 @@
+{
+  "name": "ep-studio-poc",
+  "version": "1.0.0",
+  "description": "Proof-of-concept server to test real image loading and Claude API cost outside the artifact sandbox.",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

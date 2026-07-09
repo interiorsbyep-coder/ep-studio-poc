@@ -78,6 +78,20 @@ async function loadFullSchedule(projectId) {
   };
 }
 
+// Flat item query across a project's rooms, with the room name attached — used by
+// Invoice Creator / Purchase Orders / Order Tracker, which all work off item lists
+// rather than the room-nested shape loadFullSchedule returns.
+async function itemsForProject(projectId, whereExtra = '', extraParams = []) {
+  const res = await pool.query(
+    `SELECT items.*, rooms.name AS room_name FROM items
+     JOIN rooms ON rooms.id = items.room_id
+     WHERE rooms.project_id = $1 ${whereExtra}
+     ORDER BY items.sort_order, items.id`,
+    [projectId, ...extraParams]
+  );
+  return res.rows.map(row => ({ ...mapItem(row), room: row.room_name }));
+}
+
 router.get('/', asyncHandler(async (req, res) => {
   const result = await pool.query('SELECT id, name FROM projects ORDER BY created_at, id');
   res.json(result.rows);
@@ -95,14 +109,31 @@ router.post('/', asyncHandler(async (req, res) => {
   res.status(201).json(result.rows[0]);
 }));
 
+const PROJECT_FIELDS = {
+  name: 'name',
+  clientName: 'client_name',
+  clientAddress: 'client_address',
+  clientEmail: 'client_email',
+  clientPhone: 'client_phone'
+};
+
 router.patch('/:id', asyncHandler(async (req, res) => {
-  const { name } = req.body;
-  if (!name || typeof name !== 'string') {
-    return res.status(400).json({ error: 'Missing "name" string in request body.' });
+  const sets = [];
+  const values = [];
+  Object.entries(req.body || {}).forEach(([key, value]) => {
+    const col = PROJECT_FIELDS[key];
+    if (!col) return;
+    values.push(value == null ? '' : String(value));
+    sets.push(`${col} = $${values.length}`);
+  });
+  if (sets.length === 0) {
+    return res.status(400).json({ error: 'No recognized fields in request body.' });
   }
+  values.push(req.params.id);
   const result = await pool.query(
-    'UPDATE projects SET name = $1 WHERE id = $2 RETURNING id, name',
-    [name, req.params.id]
+    `UPDATE projects SET ${sets.join(', ')} WHERE id = $${values.length}
+     RETURNING id, name, client_name AS "clientName", client_address AS "clientAddress", client_email AS "clientEmail", client_phone AS "clientPhone"`,
+    values
   );
   if (result.rows.length === 0) return res.status(404).json({ error: 'Project not found.' });
   res.json(result.rows[0]);
@@ -124,4 +155,4 @@ router.get('/:id/schedule', asyncHandler(async (req, res) => {
   res.json(schedule);
 }));
 
-module.exports = { router, loadFullSchedule, mapItem };
+module.exports = { router, loadFullSchedule, mapItem, itemsForProject };

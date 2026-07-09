@@ -12,6 +12,7 @@ const path = require('path');
 const { router: projectsRouter } = require('./routes/projects');
 const scheduleRouter = require('./routes/schedule');
 const aiRouter = require('./routes/ai');
+const financeRouter = require('./routes/finance');
 
 const app = express();
 app.use(express.json());
@@ -27,6 +28,7 @@ if (!ANTHROPIC_API_KEY) {
 app.use('/api/projects', projectsRouter);
 app.use('/api', scheduleRouter);
 app.use('/api/ai', aiRouter);
+app.use('/api', financeRouter);
 
 // The frontend calls THIS endpoint instead of api.anthropic.com directly.
 // The real API key lives only here, server-side — never sent to the browser.

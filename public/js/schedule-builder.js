@@ -50,7 +50,30 @@
   async function loadSchedule(projectId){
     const schedule = await api('/api/projects/' + projectId + '/schedule');
     state = { rooms: schedule.rooms };
+    populateClientInfo(schedule.project);
   }
+
+  function populateClientInfo(project){
+    document.getElementById('sb-client-name').value = project.clientName || '';
+    document.getElementById('sb-client-email').value = project.clientEmail || '';
+    document.getElementById('sb-client-phone').value = project.clientPhone || '';
+    document.getElementById('sb-client-address').value = project.clientAddress || '';
+  }
+
+  const CLIENT_FIELD_MAP = { 'sb-client-name':'clientName', 'sb-client-email':'clientEmail', 'sb-client-phone':'clientPhone', 'sb-client-address':'clientAddress' };
+  Object.keys(CLIENT_FIELD_MAP).forEach(id => {
+    document.getElementById(id).addEventListener('change', async (e)=>{
+      if(!currentProjectId) return;
+      const statusEl = document.getElementById('sb-client-status');
+      try{
+        await api('/api/projects/' + currentProjectId, { method:'PATCH', body: JSON.stringify({ [CLIENT_FIELD_MAP[id]]: e.target.value }) });
+        statusEl.style.display = 'inline';
+        setTimeout(()=>statusEl.style.display='none', 1200);
+      }catch(err){
+        showError('sb-error', err.message);
+      }
+    });
+  });
 
   function currentProjectName(){
     const p = (projects||[]).find(p=>p.id===currentProjectId);
@@ -170,11 +193,12 @@
   }
   function clientPrice(it){ return (it.tradeCost||0) + (it.markupAmt||0); }
   function clientShipping(it){ return (it.shippingCost||0) + (it.shippingMarkupAmt||0); }
-  function clientReceiving(it){ return (it.receivingCost||0) * (1 + (it.receivingMarkupPct||0)/100); }
+  function receivingCostTotal(it){ return (it.receivingCost||0) * (it.qty||0); }
+  function clientReceiving(it){ return receivingCostTotal(it) * (1 + (it.receivingMarkupPct||0)/100); }
   function lineTotalClient(it){ return clientPrice(it) * (it.qty||0); }
   function tradeTaxAmt(it){ return ((it.tradeCost||0)*(it.qty||0)) * (it.tradeTaxPct||0)/100; }
   function clientTaxAmt(it){ return lineTotalClient(it) * (it.clientTaxPct||0)/100; }
-  function totalCostAllIn(it){ return (it.tradeCost||0)*(it.qty||0) + tradeTaxAmt(it) + (it.shippingCost||0) + (it.receivingCost||0); }
+  function totalCostAllIn(it){ return (it.tradeCost||0)*(it.qty||0) + tradeTaxAmt(it) + (it.shippingCost||0) + receivingCostTotal(it); }
   function totalClientAllIn(it){ return lineTotalClient(it) + clientTaxAmt(it) + clientShipping(it) + clientReceiving(it); }
   function profitAmt(it){ return totalClientAllIn(it) - totalCostAllIn(it); }
   function profitMarginPct(it){ const t = totalClientAllIn(it); return t ? (profitAmt(it)/t*100) : 0; }
@@ -207,7 +231,7 @@
       table.className = 'sb-table';
       table.innerHTML = `
         <thead><tr>
-          <th>Image</th><th>Category</th><th>Item</th><th>Vendor</th><th>SKU</th><th>Finish / Material</th>
+          <th>Image</th><th>Room</th><th>Category</th><th>Item</th><th>Vendor</th><th>SKU</th><th>Finish / Material</th>
           <th>Dimensions</th><th>Qty</th><th>Lead Time</th><th>Status</th><th>Invoice</th><th>Pricing</th><th></th>
         </tr></thead>`;
       const tbody = document.createElement('tbody');
@@ -221,6 +245,7 @@
             <div class="sb-thumb" data-thumb-for="${it.id}">${thumbHtml(it)}</div>
             <input class="sb-mono sb-url-mini" data-field="imageUrl" data-room="${room.id}" data-item="${it.id}" value="${escapeAttr(it.imageUrl)}" placeholder="image url" title="Saved for records/export — won't preview here, click 🔗 to view"/>
           </td>
+          <td><input class="sb-mono" data-move-room="${it.id}" value="${escapeAttr(room.name)}" list="sb-room-options" title="Change which room this item belongs to" style="width:90px;"/></td>
           <td><select data-field="category" data-room="${room.id}" data-item="${it.id}">${CATEGORIES.map(c=>`<option ${c===it.category?'selected':''}>${c}</option>`).join('')}</select></td>
           <td>
             <div style="display:flex;align-items:center;gap:5px;">
@@ -251,7 +276,7 @@
           drawerTr.className = 'sb-drawer-row';
           drawerTr.dataset.drawerFor = it.id;
           const profitCls = profitAmt(it) >= 0 ? 'profit-pos' : 'profit-neg';
-          drawerTr.innerHTML = `<td colspan="13"><div class="sb-drawer">
+          drawerTr.innerHTML = `<td colspan="14"><div class="sb-drawer">
             <div class="sb-drawer-group">
               <div class="sb-drawer-group-label">Product</div>
               <div class="sb-drawer-field"><label>Trade Cost</label><input class="sb-mono" type="number" min="0" step="0.01" data-field="tradeCost" data-room="${room.id}" data-item="${it.id}" value="${it.tradeCost}"/></div>
@@ -276,7 +301,7 @@
             </div>
             <div class="sb-drawer-group">
               <div class="sb-drawer-group-label">Receiving</div>
-              <div class="sb-drawer-field"><label>Receiving Cost</label><input class="sb-mono" type="number" min="0" step="0.01" data-field="receivingCost" data-room="${room.id}" data-item="${it.id}" value="${it.receivingCost}"/></div>
+              <div class="sb-drawer-field"><label>Receiving Cost / Unit</label><input class="sb-mono" type="number" min="0" step="0.01" data-field="receivingCost" data-room="${room.id}" data-item="${it.id}" value="${it.receivingCost}"/></div>
               <div class="sb-drawer-field"><label>Receiving Markup %</label><input class="sb-mono" type="number" step="0.1" data-field="receivingMarkupPct" data-room="${room.id}" data-item="${it.id}" value="${round2(it.receivingMarkupPct)}"/></div>
               <div class="sb-drawer-field"><label>Client Receiving</label><span class="sb-computed-val" data-computed="clientReceiving">${money(clientReceiving(it))}</span></div>
             </div>
@@ -311,6 +336,9 @@
     document.getElementById('sb-count-rooms').textContent = state.rooms.length;
     document.getElementById('sb-count-items').textContent = totalItems;
     document.getElementById('sb-count-total').textContent = money(totalClient);
+
+    document.getElementById('sb-room-options').innerHTML =
+      state.rooms.map(r => `<option value="${escapeAttr(r.name)}"></option>`).join('');
   }
 
   function escapeAttr(s){ return (s===undefined||s===null?'':String(s)).replace(/"/g,'&quot;'); }
@@ -370,7 +398,8 @@
 
   const NUMERIC_FIELDS = ['qty','tradeCost','markupPct','markupAmt','tradeTaxPct','clientTaxPct',
     'shippingCost','shippingMarkupPct','shippingMarkupAmt','receivingCost','receivingMarkupPct'];
-  const PRICING_TRIGGER_FIELDS = ['tradeCost','markupPct','markupAmt','shippingCost','shippingMarkupPct','shippingMarkupAmt','qty'];
+  const PRICING_TRIGGER_FIELDS = ['tradeCost','markupPct','markupAmt','shippingCost','shippingMarkupPct','shippingMarkupAmt','qty',
+    'tradeTaxPct','clientTaxPct','receivingCost','receivingMarkupPct'];
   const MARKUP_PAIRS = { markupPct:'markupAmt', markupAmt:'markupPct', shippingMarkupPct:'shippingMarkupAmt', shippingMarkupAmt:'shippingMarkupPct' };
 
   function scheduleItemSave(itemId){
@@ -445,6 +474,19 @@
         catch(err){ showError('sb-error', err.message); }
       }
     }
+    if(e.target.dataset.moveRoom){
+      const itemId = e.target.dataset.moveRoom;
+      const roomName = e.target.value.trim();
+      const room = state.rooms.find(r => (r.items||[]).some(i=>String(i.id)===String(itemId)));
+      if(room && roomName && roomName.toLowerCase() === room.name.toLowerCase()) return; // unchanged
+      try{
+        const schedule = await api('/api/items/' + itemId + '/room', { method:'PATCH', body: JSON.stringify({ roomName }) });
+        state.rooms = schedule.rooms;
+        render();
+      }catch(err){
+        showError('sb-error', err.message);
+      }
+    }
   });
   document.getElementById('sb-rooms').addEventListener('click', async e=>{
     const el = e.target.closest('[data-action]');
@@ -489,7 +531,7 @@
       "Trade Cost","Markup %","Markup $","Client Price","Line Total (Client)",
       "Trade Tax %","Trade Tax $","Client Tax %","Client Tax $",
       "Shipping Cost","Shipping Markup %","Shipping Markup $","Client Shipping Price",
-      "Receiving Cost","Receiving Markup %","Client Receiving Cost",
+      "Receiving Cost / Unit","Receiving Markup %","Client Receiving Cost",
       "Total Cost (All-In)","Total Client Price (All-In)","Profit ($)","Profit Margin %",
       "Lead Time","Status","Notes","Include on Invoice","Invoiced (Invoice ID)","PO ID","Image URL","Source URL"]];
     state.rooms.forEach(room=>{

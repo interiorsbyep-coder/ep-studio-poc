@@ -118,4 +118,29 @@ router.delete('/items/:id', asyncHandler(async (req, res) => {
   res.json(await loadFullSchedule(projectId));
 }));
 
+// Moves an item into a different room by name, creating that room if it doesn't
+// already exist in the project — lets items sourced into "General" get sorted later.
+router.patch('/items/:id/room', asyncHandler(async (req, res) => {
+  const projectId = await projectIdForItem(req.params.id);
+  if (!projectId) return res.status(404).json({ error: 'Item not found.' });
+  const roomName = (req.body.roomName || '').trim() || 'General';
+
+  const existing = await pool.query(
+    'SELECT id FROM rooms WHERE project_id = $1 AND lower(name) = lower($2)',
+    [projectId, roomName]
+  );
+  let roomId;
+  if (existing.rows.length) {
+    roomId = existing.rows[0].id;
+  } else {
+    const created = await pool.query(
+      'INSERT INTO rooms (project_id, name) VALUES ($1, $2) RETURNING id',
+      [projectId, roomName]
+    );
+    roomId = created.rows[0].id;
+  }
+  await pool.query('UPDATE items SET room_id = $1 WHERE id = $2', [roomId, req.params.id]);
+  res.json(await loadFullSchedule(projectId));
+}));
+
 module.exports = router;

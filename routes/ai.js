@@ -1,6 +1,6 @@
 const express = require('express');
 const pool = require('../db');
-const { loadFullSchedule } = require('./projects');
+const { loadFullSchedule, itemsForProject } = require('./projects');
 const VENDOR_LIST = require('../data/vendors');
 
 const router = express.Router();
@@ -332,6 +332,84 @@ router.post('/tear-sheet', async (req, res) => {
     res.json({ item: { ...item, room: room || item.room, installLocation: loc || item.installLocation } });
   } catch (err) {
     res.status(500).json({ error: "Couldn't build that tear sheet — try a more specific product link or description, then generate again. (" + err.message + ")" });
+  }
+});
+
+const TRACKER_PROMPT = (raw, currentItems, project) => `You are a procurement status tracker for an interior design studio. You're given the CURRENTLY TRACKED items (each already has a status) and a batch of raw updates (vendor emails, shipping notices, portal screenshots described in text). Match each update to the closest tracked item, classify its new status into the fixed list below, flag anything at risk, and draft a short client update email.
+
+PROJECT: ${project}
+
+FIXED STATUS LIST (use exactly one of these for newStatus, nothing else):
+${STATUSES.join(", ")}
+
+CURRENTLY TRACKED ITEMS:
+${JSON.stringify(currentItems.map(i => ({ id: i.id, item: i.item, vendor: i.vendor, status: i.status })))}
+
+RAW UPDATES TO SCAN:
+"${raw}"
+
+Return ONLY a single valid minified JSON object, no markdown fences, no commentary:
+{
+"updates": [{"id":number (the exact id of the matching tracked item from the list above — only include items you can confidently match),"newStatus":one of the fixed statuses above}],
+"flags": [string] (short, specific warnings — possible delays, missing tracking, anything needing a follow-up call),
+"clientEmailDraft": string (a warm, concise client update email in a designer's voice referencing the specific items and statuses, 3-5 sentences, no subject line, sign off as "warmly," with no name after)
+}`;
+
+router.post('/order-tracker-scan', async (req, res) => {
+  if (!ANTHROPIC_API_KEY) {
+    return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not set on the server.' });
+  }
+  const { projectId, rawText, projectName } = req.body;
+  if (!projectId || !rawText || typeof rawText !== 'string' || !rawText.trim()) {
+    return res.status(400).json({ error: 'Missing "projectId" or "rawText" in request body.' });
+  }
+
+  try {
+    const trackedItems = await itemsForProject(projectId, "AND items.po_id != ''");
+    if (!trackedItems.length) {
+      return res.status(400).json({ error: "Nothing tracked yet — refresh from Schedule first so there's something to match updates against." });
+    }
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1500,
+        messages: [{ role: 'user', content: TRACKER_PROMPT(rawText, trackedItems, projectName || 'Untitled Residence') }]
+      })
+    });
+    if (!response.ok) {
+      const errBody = await response.json().catch(() => null);
+      const msg = errBody && errBody.error && errBody.error.message;
+      return res.status(response.status).json({ error: msg || `Anthropic API error (HTTP ${response.status})` });
+    }
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message || 'API error');
+    const text = (data.content || []).map(b => b.text || '').join('');
+    const match = text.match(/\{[\s\S]*\}/);
+    const jsonStr = match ? match[0] : text.replace(/```json|```/g, '').trim();
+    const result = JSON.parse(jsonStr);
+
+    const validUpdates = (result.updates || []).filter(u =>
+      STATUSES.includes(u.newStatus) && trackedItems.some(it => it.id === Number(u.id))
+    );
+    for (const u of validUpdates) {
+      await pool.query('UPDATE items SET status = $1 WHERE id = $2', [u.newStatus, Number(u.id)]);
+    }
+
+    res.json({
+      updates: validUpdates,
+      flags: result.flags || [],
+      clientEmailDraft: result.clientEmailDraft || '',
+      items: await itemsForProject(projectId, "AND items.po_id != ''")
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Couldn't process those updates — try pasting a smaller batch, then scan again. (" + err.message + ")" });
   }
 });
 

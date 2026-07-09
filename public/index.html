@@ -17,11 +17,11 @@
   <button class="app-tab active" data-tab="schedule-builder">Schedule Builder</button>
   <button class="app-tab" data-tab="sourcing-specialist">Sourcing Specialist</button>
   <button class="app-tab" data-tab="tear-sheet-builder">Tear Sheet Builder</button>
-  <button class="app-tab" disabled title="Coming soon">Quality Checker</button>
-  <button class="app-tab" disabled title="Coming soon">Order Tracker</button>
-  <button class="app-tab" disabled title="Coming soon">Invoice Creator</button>
-  <button class="app-tab" disabled title="Coming soon">Purchase Orders</button>
-  <button class="app-tab" disabled title="Coming soon">Income &amp; Expense</button>
+  <button class="app-tab" data-tab="order-tracker">Order Tracker</button>
+  <button class="app-tab" data-tab="invoice-creator">Invoice Creator</button>
+  <button class="app-tab" data-tab="purchase-orders">Purchase Orders</button>
+  <button class="app-tab" data-tab="income-expense">Income &amp; Expense</button>
+  <button class="app-tab" data-tab="business-overview">Business Overview</button>
 </nav>
 
 <main class="app-main">
@@ -52,6 +52,17 @@
     </div>
 
     <div class="sb-panel">
+      <div class="sb-panel-label">Client info</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <input type="text" id="sb-client-name" placeholder="Client name" style="flex:1;min-width:160px;font-family:'Montserrat',sans-serif;font-size:13px;border:1px solid var(--border);border-radius:3px;padding:9px 12px;background:#fff;color:var(--text);"/>
+        <input type="text" id="sb-client-email" placeholder="Email" style="flex:1;min-width:160px;font-family:'Montserrat',sans-serif;font-size:13px;border:1px solid var(--border);border-radius:3px;padding:9px 12px;background:#fff;color:var(--text);"/>
+        <input type="text" id="sb-client-phone" placeholder="Phone" style="flex:1;min-width:140px;font-family:'Montserrat',sans-serif;font-size:13px;border:1px solid var(--border);border-radius:3px;padding:9px 12px;background:#fff;color:var(--text);"/>
+      </div>
+      <input type="text" id="sb-client-address" placeholder="Address" style="width:100%;margin-top:10px;font-family:'Montserrat',sans-serif;font-size:13px;border:1px solid var(--border);border-radius:3px;padding:9px 12px;background:#fff;color:var(--text);box-sizing:border-box;"/>
+      <span class="sb-loading" id="sb-client-status" style="display:none;">Saved</span>
+    </div>
+
+    <div class="sb-panel">
       <div class="sb-panel-label">Build from notes</div>
       <textarea id="sb-input" placeholder="e.g. Living room needs a curved sofa, two swivel chairs from Verellen, a round coffee table in walnut, a jute area rug, brass floor lamp — client wants kid-friendly performance fabric throughout..."></textarea>
       <div class="sb-panel-actions">
@@ -73,6 +84,7 @@
       <div class="sb-error" id="sb-clip-error" style="display:none;"></div>
     </div>
 
+    <datalist id="sb-room-options"></datalist>
     <div id="sb-rooms"></div>
     <div class="sb-empty" id="sb-empty">No items yet — paste your notes above, add a link, or add a room to start drafting.</div>
 
@@ -192,11 +204,146 @@
     </div>
   </div>
 </section>
+
+<section class="app-panel" data-panel="invoice-creator">
+  <div class="iv-root">
+    <div class="iv-eyebrow">Invoice Creator</div>
+    <div class="iv-title">Ready to Bill</div>
+    <div class="iv-sub">Pulls every item you've checked "Include on Invoice" in the Schedule tab, lets you confirm the batch, and totals it up — this is your staging step before handing off to QuickBooks.</div>
+
+    <div class="iv-notice">This is an <b>internal working page</b>, not a client-facing document — the client only ever sees the invoice QuickBooks generates. Everything here (cost, markup, profit) is fine to show since it's for you only.</div>
+
+    <div class="iv-toolbar">
+      <button class="iv-btn iv-btn-ghost" id="iv-refresh">↻ Refresh from Schedule</button>
+      <span class="iv-mono" id="iv-project-label" style="font-size:12px;color:var(--muted);"></span>
+    </div>
+
+    <div class="iv-section-label">Items ready to invoice</div>
+    <div id="iv-empty" class="iv-empty">No items checked yet — go to the Schedule tab, check "Include on Invoice" on the items you're ready to bill, then come back and refresh.</div>
+    <div id="iv-table-wrap"></div>
+
+    <div id="iv-summary-wrap"></div>
+
+    <div class="iv-toolbar">
+      <button class="iv-btn" id="iv-create" style="display:none;">Create Invoice &amp; Mark as Invoiced</button>
+    </div>
+    <div class="iv-mono" id="iv-status-msg" style="font-size:12px;color:var(--success);display:none;margin-bottom:10px;"></div>
+
+    <div class="iv-section-label">Invoice history — this project</div>
+    <div id="iv-history-empty" class="iv-empty">No invoices created yet.</div>
+    <div id="iv-history-wrap"></div>
+  </div>
+</section>
+
+<section class="app-panel" data-panel="purchase-orders">
+  <div class="po-root">
+    <div class="po-eyebrow">Purchase Orders</div>
+    <div class="po-title">Ready to Order</div>
+    <div class="po-sub">Groups every invoiced item by vendor and totals what you owe them — Trade Cost, Trade Tax, Shipping, and Receiving. This is what you send to the vendor to actually place the order.</div>
+
+    <div class="po-notice">Only items that have already been <b>invoiced</b> show up here — that's your signal the client's committed and it's time to actually order the product. Uses your cost-side numbers, not client pricing.</div>
+
+    <div class="po-toolbar">
+      <button class="po-btn po-btn-ghost" id="po-refresh">↻ Refresh from Schedule</button>
+      <span class="po-mono" id="po-project-label" style="font-size:12px;color:var(--muted);"></span>
+    </div>
+
+    <div class="po-section-label">Ready to order, by vendor</div>
+    <div id="po-empty" class="po-empty">No invoiced items waiting on a PO yet — invoice something in the Invoice Creator tab first, then come back and refresh.</div>
+    <div id="po-groups-wrap"></div>
+
+    <div class="po-mono" id="po-status-msg" style="font-size:12px;color:var(--success);display:none;margin-bottom:10px;"></div>
+
+    <div class="po-section-label">Purchase order history — this project</div>
+    <div id="po-history-empty" class="po-empty">No purchase orders created yet.</div>
+    <div id="po-history-wrap"></div>
+  </div>
+</section>
+
+<section class="app-panel" data-panel="order-tracker">
+  <div class="ot-root">
+    <div class="ot-eyebrow">Order Tracker</div>
+    <div class="ot-title">Your Procurement Status Tracker</div>
+    <div class="ot-sub">Every item that's been put on a Purchase Order shows up here automatically. Paste in vendor emails or tracking notices to scan for updates, or change a status by hand — either way, it writes straight back to the Schedule.</div>
+
+    <div class="ot-notice">Tracked items come from the <b>Purchase Orders</b> tab — once something's on a PO, it appears here on refresh. Status changes here update the same item in Schedule, PO, and here — one source of truth, not four separate lists.</div>
+
+    <div class="ot-toolbar">
+      <button class="ot-btn ot-btn-ghost" id="ot-refresh">↻ Refresh from Schedule</button>
+      <span class="ot-mono" id="ot-project-label" style="font-size:12px;color:var(--muted);"></span>
+    </div>
+
+    <div class="ot-panel">
+      <div class="ot-panel-label">Scan vendor updates</div>
+      <textarea id="ot-input" placeholder='e.g. "Shipping notice: kidney sofa x2 now In Production, ETA 3 wks. Coffee table shipped via carrier, tracking attached. Vendor portal shows dining chairs may slip 2 weeks..."'></textarea>
+      <div class="ot-toolbar" style="margin-top:12px;margin-bottom:0;">
+        <button class="ot-btn" id="ot-scan">Scan &amp; update</button>
+        <span class="ot-loading" id="ot-loading" style="display:none;">Reading updates…</span>
+      </div>
+      <div class="ot-error" id="ot-error" style="display:none;"></div>
+    </div>
+
+    <div class="ot-stats" id="ot-stats" style="display:none;">
+      <div class="ot-stat"><div class="ot-stat-label">Tracked Items</div><div class="ot-stat-value" id="ot-stat-total">0</div></div>
+      <div class="ot-stat"><div class="ot-stat-label">Updated Last Scan</div><div class="ot-stat-value" id="ot-stat-updated">0</div></div>
+      <div class="ot-stat"><div class="ot-stat-label">Flags</div><div class="ot-stat-value" id="ot-stat-flags">0</div></div>
+    </div>
+
+    <div id="ot-empty" class="ot-empty">Nothing on order yet — once you create a PO in the Purchase Orders tab, refresh here to start tracking it.</div>
+    <div id="ot-flags-wrap"></div>
+    <div id="ot-table-wrap"></div>
+    <div id="ot-draft-wrap"></div>
+  </div>
+</section>
+
+<section class="app-panel" data-panel="income-expense">
+  <div class="ie-root">
+    <div class="ie-eyebrow">Income &amp; Expense</div>
+    <div class="ie-title">Project Financial Rollup</div>
+    <div class="ie-sub">Automatically totals every invoice (income) and purchase order (expense) for the current project, plus lets you log anything that doesn't come through those — design fees, retainers, misc. costs.</div>
+
+    <div class="ie-notice">Income pulls from the <b>Invoice Creator</b> tab's history; expenses pull from the <b>Purchase Orders</b> tab's history. Add design fees or one-off costs manually below — those aren't captured automatically.</div>
+
+    <div class="ie-toolbar">
+      <button class="ie-btn ie-btn-ghost" id="ie-refresh">↻ Refresh from Invoices &amp; POs</button>
+      <span class="ie-mono" id="ie-project-label" style="font-size:12px;color:var(--muted);"></span>
+    </div>
+    <div class="ie-error" id="ie-error" style="display:none;"></div>
+
+    <div class="ie-stats">
+      <div class="ie-stat"><div class="ie-stat-label">Total Income</div><div class="ie-stat-value income" id="ie-total-income">$0</div></div>
+      <div class="ie-stat"><div class="ie-stat-label">Total Expenses</div><div class="ie-stat-value expense" id="ie-total-expense">$0</div></div>
+      <div class="ie-stat net"><div class="ie-stat-label">Net</div><div class="ie-stat-value" id="ie-net">$0</div></div>
+      <div class="ie-stat"><div class="ie-stat-label">Margin</div><div class="ie-stat-value" id="ie-margin">0%</div></div>
+      <div class="ie-stat"><div class="ie-stat-label">Total Receiving Cost (owed)</div><div class="ie-stat-value" id="ie-total-receiving">$0</div></div>
+    </div>
+    <div class="ie-sub" style="margin:-14px 0 20px;">Receiving fees are paid to a separate warehouse/receiving service, not your product vendors — this figure is broken out from Total Expenses on purpose. Reflects items currently on a Purchase Order, before markup.</div>
+
+    <div class="ie-section-label">Add a manual entry</div>
+    <div class="ie-manual-row">
+      <select id="ie-manual-type">
+        <option value="Income">Income</option>
+        <option value="Expense">Expense</option>
+      </select>
+      <input type="text" id="ie-manual-desc" placeholder="Description — e.g. Design fee, initial retainer"/>
+      <input type="number" id="ie-manual-amount" placeholder="Amount" min="0" step="0.01"/>
+      <button class="ie-btn ie-btn-sm" id="ie-manual-add">Add</button>
+    </div>
+
+    <div class="ie-section-label">All entries</div>
+    <div id="ie-empty" class="ie-empty">Nothing yet — refresh from Invoices &amp; POs, or add a manual entry above.</div>
+    <div id="ie-table-wrap"></div>
+  </div>
+</section>
 </main>
 
 <script src="/js/schedule-builder.js"></script>
 <script src="/js/sourcing-specialist.js"></script>
 <script src="/js/tear-sheet-builder.js"></script>
+<script src="/js/invoice-creator.js"></script>
+<script src="/js/purchase-orders.js"></script>
+<script src="/js/order-tracker.js"></script>
+<script src="/js/income-expense.js"></script>
 <script src="/js/app-shell.js"></script>
 </body>
 </html>

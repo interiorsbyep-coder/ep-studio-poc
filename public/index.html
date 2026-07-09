@@ -15,8 +15,8 @@
 
 <nav class="app-tabs">
   <button class="app-tab active" data-tab="schedule-builder">Schedule Builder</button>
-  <button class="app-tab" disabled title="Coming soon">Sourcing Specialist</button>
-  <button class="app-tab" disabled title="Coming soon">Tear Sheet Builder</button>
+  <button class="app-tab" data-tab="sourcing-specialist">Sourcing Specialist</button>
+  <button class="app-tab" data-tab="tear-sheet-builder">Tear Sheet Builder</button>
   <button class="app-tab" disabled title="Coming soon">Quality Checker</button>
   <button class="app-tab" disabled title="Coming soon">Order Tracker</button>
   <button class="app-tab" disabled title="Coming soon">Invoice Creator</button>
@@ -25,9 +25,10 @@
 </nav>
 
 <main class="app-main">
+<section class="app-panel active" data-panel="schedule-builder">
   <div class="sb-root" id="sb-root">
     <div class="sb-eyebrow">FF&amp;E Schedule Builder</div>
-    <div class="sb-title">Your Schedule, Drafted</div>
+    <div class="sb-title">Your Schedule</div>
     <div class="sb-sub">Paste a messy product list, notes, or URLs below and it lands here as a clean, editable line-item schedule — or add rooms and items by hand.</div>
 
     <div class="sb-meta">
@@ -85,8 +86,117 @@
       <button class="sb-btn sb-btn-ghost" id="sb-export">Export CSV</button>
     </div>
   </div>
+</section>
+
+<section class="app-panel" data-panel="sourcing-specialist">
+  <div class="sp-root">
+    <div class="sp-eyebrow">Sourcing Specialist</div>
+    <div class="sp-title">Find It, Fast</div>
+    <div class="sp-sub">Describe what you need in plain language — dimensions, budget, lead time, vibe. It searches live and comes back with a curated shortlist.</div>
+    <div class="sp-adding-to" id="sp-adding-to"></div>
+
+    <div class="sp-panel">
+      <div class="sp-panel-label">What are you looking for?</div>
+      <input type="text" id="sp-query" placeholder='e.g. "30-32W swivel glider chair under $3K, lead time under 8 weeks, performance fabric"'/>
+      <div class="sp-filters">
+        <div class="sp-filter"><label>Max budget</label><input type="number" id="sp-budget" placeholder="$"/></div>
+        <div class="sp-filter"><label>Max lead time (wks)</label><input type="number" id="sp-lead" placeholder="wks"/></div>
+        <div class="sp-filter"><label>Category</label>
+          <select id="sp-category">
+            <option value="">Any</option>
+            <option>Upholstery</option>
+            <option>Case Goods</option>
+            <option>Lighting</option>
+            <option>Rugs</option>
+            <option>Accessories</option>
+            <option>Window Treatments</option>
+          </select>
+        </div>
+        <div class="sp-filter"><label>Vendor Tier</label>
+          <select id="sp-tier">
+            <option value="">Any tier</option>
+            <option value="1">Tier 1 — Budget / value</option>
+            <option value="2">Tier 2 — Mid-range</option>
+            <option value="3">Tier 3 — Designer / luxury</option>
+          </select>
+        </div>
+      </div>
+      <div class="sp-panel-actions">
+        <button class="sp-btn" id="sp-search">Search</button>
+        <span class="sp-loading" id="sp-loading" style="display:none;">Searching vendors…</span>
+      </div>
+      <div class="sp-error" id="sp-error" style="display:none;"></div>
+    </div>
+
+    <div class="sp-section-label">Results</div>
+    <div id="sp-empty" class="sp-empty">Nothing yet — describe what you need above and hit Search.</div>
+    <div class="sp-grid" id="sp-results"></div>
+
+    <div class="sp-section-label">Shortlist</div>
+    <ul class="sp-shortlist" id="sp-shortlist"></ul>
+    <div id="sp-shortlist-empty" class="sp-empty">Save items from your results to build a shortlist here.</div>
+    <div class="sp-footer">
+      <button class="sp-btn sp-btn-ghost sp-btn-sm" id="sp-copy">Copy shortlist</button>
+      <button class="sp-btn sp-btn-ghost sp-btn-sm" id="sp-clear">Clear shortlist</button>
+    </div>
+  </div>
+</section>
+
+<section class="app-panel" data-panel="tear-sheet-builder">
+  <div class="tb-root">
+    <div class="tb-eyebrow">Tear Sheet Builder</div>
+    <div class="tb-title">Your Tear Sheet Generator</div>
+    <div class="tb-sub">Drop in a product URL or pull an item straight from your FF&amp;E schedule. It produces a branded, client-ready tear sheet — the deliverable that used to eat your afternoon, built in seconds.</div>
+
+    <div class="tb-meta tb-noprint">
+      <span>PROJECT</span>
+      <input id="tb-project" size="20"/>
+      <span>DATE</span>
+      <input id="tb-date" size="12"/>
+    </div>
+
+    <div class="tb-panel tb-noprint">
+      <div class="tb-panel-label">Pull from Schedule</div>
+      <div class="tb-row">
+        <div class="tb-field" style="flex:2;">
+          <label>Item</label>
+          <select id="tb-schedule-select"><option value="">No items found — check Schedule Builder first</option></select>
+        </div>
+        <div class="tb-field"><label>Install location</label><input id="tb-schedule-loc" placeholder="e.g. Facing pair, center of room"/></div>
+      </div>
+      <div class="tb-panel-actions">
+        <button class="tb-btn" id="tb-schedule-generate">Generate from this item</button>
+        <button class="tb-btn tb-btn-ghost" id="tb-schedule-refresh" type="button">↻ Refresh list</button>
+      </div>
+    </div>
+
+    <div class="tb-panel tb-noprint">
+      <div class="tb-panel-label">Or build from a link / note</div>
+      <textarea id="tb-input" placeholder='e.g. "https://www.verellen.us/victoria-swivel-glider" or a row like: Living Room — Infiniti 88" Curve Back Sofa, 2 facing, performance fabric TBD, 8-10 wk lead time'></textarea>
+      <div class="tb-row">
+        <div class="tb-field"><label>Room</label><input id="tb-room" placeholder="e.g. Living Room"/></div>
+        <div class="tb-field"><label>Install location</label><input id="tb-loc" placeholder="e.g. Facing pair, center of room"/></div>
+      </div>
+      <div class="tb-panel-actions">
+        <button class="tb-btn" id="tb-generate">Generate tear sheet</button>
+        <span class="tb-loading" id="tb-loading" style="display:none;">Drafting the sheet…</span>
+      </div>
+      <div class="tb-error" id="tb-error" style="display:none;"></div>
+    </div>
+
+    <div id="tb-empty" class="tb-empty">No tear sheets yet — pick an item from Schedule, or paste a product URL / row above to build your first one.</div>
+    <div id="tb-sheets"></div>
+
+    <div class="tb-panel-actions tb-noprint" id="tb-footer" style="display:none;justify-content:center;">
+      <button class="tb-btn tb-btn-ghost" id="tb-print">Print / Save as PDF</button>
+    </div>
+  </div>
+</section>
 </main>
 
 <script src="/js/schedule-builder.js"></script>
+<script src="/js/sourcing-specialist.js"></script>
+<script src="/js/tear-sheet-builder.js"></script>
+<script src="/js/app-shell.js"></script>
 </body>
 </html>

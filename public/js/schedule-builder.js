@@ -33,13 +33,16 @@
   function findRoom(roomId){ return (state.rooms||[]).find(r => String(r.id) === String(roomId)); }
   function findItem(room, itemId){ return room && (room.items||[]).find(i => String(i.id) === String(itemId)); }
 
+  const LS_PROJECT_KEY = 'ep-current-project-id';
+
   async function initProjects(){
     projects = await api('/api/projects');
     if(projects.length === 0){
       const p = await api('/api/projects', { method:'POST', body: JSON.stringify({ name: 'Untitled Residence' }) });
       projects = [p];
     }
-    currentProjectId = projects[0].id;
+    const savedId = Number(localStorage.getItem(LS_PROJECT_KEY));
+    currentProjectId = projects.find(p => p.id === savedId) ? savedId : projects[0].id;
     renderProjectSelect();
     await loadSchedule(currentProjectId);
   }
@@ -57,11 +60,22 @@
   function renderProjectSelect(){
     const sel = document.getElementById('sb-project-select');
     sel.innerHTML = (projects||[]).map(p=>`<option value="${p.id}" ${p.id===currentProjectId?'selected':''}>${p.name.replace(/</g,'&lt;')}</option>`).join('');
+    broadcastCurrentProject();
+  }
+
+  // Other tool panels (e.g. Sourcing Specialist) need to know which project is active
+  // to know where "+ Schedule" pushes items — this is the cheapest way to share that
+  // without restructuring Schedule Builder's own UI.
+  function broadcastCurrentProject(){
+    window.EPCurrentProject = currentProjectId ? { id: currentProjectId, name: currentProjectName() } : null;
+    if(currentProjectId) localStorage.setItem(LS_PROJECT_KEY, String(currentProjectId));
+    window.dispatchEvent(new CustomEvent('ep:project-changed', { detail: window.EPCurrentProject }));
   }
 
   document.getElementById('sb-project-select').addEventListener('change', async (e)=>{
     currentProjectId = Number(e.target.value);
     await loadSchedule(currentProjectId);
+    broadcastCurrentProject();
     render();
   });
 
@@ -201,22 +215,17 @@
       room.items.forEach(it => {
         totalClient += totalClientAllIn(it);
         const tr = document.createElement('tr');
-        const thumbInner = it.imageUrl
-          ? `<img src="${escapeAttr(proxiedImg(it.imageUrl))}" alt="" referrerpolicy="no-referrer" loading="lazy" onerror="this.parentElement.querySelector('.sb-thumb-ph').style.display='flex';this.style.display='none';"/><span class="sb-thumb-ph" style="display:none;">&mdash;</span>`
-          : '<span class="sb-thumb-ph">&mdash;</span>';
         const isExpanded = expandedItems.has(String(it.id));
         tr.innerHTML = `
           <td>
-            <div class="sb-thumb">${thumbInner}</div>
+            <div class="sb-thumb" data-thumb-for="${it.id}">${thumbHtml(it)}</div>
             <input class="sb-mono sb-url-mini" data-field="imageUrl" data-room="${room.id}" data-item="${it.id}" value="${escapeAttr(it.imageUrl)}" placeholder="image url" title="Saved for records/export — won't preview here, click 🔗 to view"/>
           </td>
           <td><select data-field="category" data-room="${room.id}" data-item="${it.id}">${CATEGORIES.map(c=>`<option ${c===it.category?'selected':''}>${c}</option>`).join('')}</select></td>
           <td>
             <div style="display:flex;align-items:center;gap:5px;">
               <input data-field="item" data-room="${room.id}" data-item="${it.id}" value="${escapeAttr(it.item)}" placeholder="Item name" style="flex:1;"/>
-              ${it.sourceUrl
-                ? `<a class="sb-link has-url" href="${escapeAttr(it.sourceUrl)}" target="_blank" rel="noopener" title="Open product page">🔗</a>`
-                : `<span class="sb-link" title="Add a link below first">🔗</span>`}
+              <span data-link-for="${it.id}">${linkHtml(it)}</span>
             </div>
             <input class="sb-mono sb-url-mini" data-field="sourceUrl" data-room="${room.id}" data-item="${it.id}" value="${escapeAttr(it.sourceUrl)}" placeholder="product url" title="Paste the product page URL"/>
           </td>
@@ -232,7 +241,7 @@
             ${it.invoicedId ? `<div class="sb-invoiced-badge" title="Already invoiced">${escapeHtmlLite(it.invoicedId)}</div>` : ''}
             ${it.poId ? `<div class="sb-invoiced-badge" style="background:var(--brass);" title="Already on a PO">${escapeHtmlLite(it.poId)}</div>` : ''}
           </td>
-          <td class="sb-mono sb-computed">${money(totalClientAllIn(it))}<br/><button class="sb-expand-btn" data-action="toggle-drawer" data-room="${room.id}" data-item="${it.id}">${isExpanded?'Hide':'Pricing'} ▾</button></td>
+          <td class="sb-mono sb-computed" data-total-cell="${it.id}"><span class="sb-row-total">${money(totalClientAllIn(it))}</span><br/><button class="sb-expand-btn" data-action="toggle-drawer" data-room="${room.id}" data-item="${it.id}">${isExpanded?'Hide':'Pricing'} ▾</button></td>
           <td><button class="sb-del" data-action="del-item" data-room="${room.id}" data-item="${it.id}" title="Remove item">×</button></td>
         `;
         tbody.appendChild(tr);
@@ -240,6 +249,7 @@
         if(isExpanded){
           const drawerTr = document.createElement('tr');
           drawerTr.className = 'sb-drawer-row';
+          drawerTr.dataset.drawerFor = it.id;
           const profitCls = profitAmt(it) >= 0 ? 'profit-pos' : 'profit-neg';
           drawerTr.innerHTML = `<td colspan="13"><div class="sb-drawer">
             <div class="sb-drawer-group">
@@ -247,38 +257,38 @@
               <div class="sb-drawer-field"><label>Trade Cost</label><input class="sb-mono" type="number" min="0" step="0.01" data-field="tradeCost" data-room="${room.id}" data-item="${it.id}" value="${it.tradeCost}"/></div>
               <div class="sb-drawer-field"><label>Markup %</label><input class="sb-mono" type="number" step="0.1" data-field="markupPct" data-room="${room.id}" data-item="${it.id}" value="${round2(it.markupPct)}"/></div>
               <div class="sb-drawer-field"><label>Markup $</label><input class="sb-mono" type="number" step="0.01" data-field="markupAmt" data-room="${room.id}" data-item="${it.id}" value="${round2(it.markupAmt)}"/></div>
-              <div class="sb-drawer-field"><label>Client Price</label><span class="sb-computed-val">${money(clientPrice(it))}</span></div>
-              <div class="sb-drawer-field"><label>Line Total (Client)</label><span class="sb-computed-val">${money(lineTotalClient(it))}</span></div>
+              <div class="sb-drawer-field"><label>Client Price</label><span class="sb-computed-val" data-computed="clientPrice">${money(clientPrice(it))}</span></div>
+              <div class="sb-drawer-field"><label>Line Total (Client)</label><span class="sb-computed-val" data-computed="lineTotalClient">${money(lineTotalClient(it))}</span></div>
             </div>
             <div class="sb-drawer-group">
               <div class="sb-drawer-group-label">Tax</div>
               <div class="sb-drawer-field"><label>Trade Tax %</label><input class="sb-mono" type="number" step="0.1" data-field="tradeTaxPct" data-room="${room.id}" data-item="${it.id}" value="${it.tradeTaxPct}"/></div>
-              <div class="sb-drawer-field"><label>Trade Tax $</label><span class="sb-computed-val">${money(tradeTaxAmt(it))}</span></div>
+              <div class="sb-drawer-field"><label>Trade Tax $</label><span class="sb-computed-val" data-computed="tradeTaxAmt">${money(tradeTaxAmt(it))}</span></div>
               <div class="sb-drawer-field"><label>Client Tax %</label><input class="sb-mono" type="number" step="0.1" data-field="clientTaxPct" data-room="${room.id}" data-item="${it.id}" value="${it.clientTaxPct}"/></div>
-              <div class="sb-drawer-field"><label>Client Tax $</label><span class="sb-computed-val">${money(clientTaxAmt(it))}</span></div>
+              <div class="sb-drawer-field"><label>Client Tax $</label><span class="sb-computed-val" data-computed="clientTaxAmt">${money(clientTaxAmt(it))}</span></div>
             </div>
             <div class="sb-drawer-group">
               <div class="sb-drawer-group-label">Shipping</div>
               <div class="sb-drawer-field"><label>Shipping Cost</label><input class="sb-mono" type="number" min="0" step="0.01" data-field="shippingCost" data-room="${room.id}" data-item="${it.id}" value="${it.shippingCost}"/></div>
               <div class="sb-drawer-field"><label>Ship Markup %</label><input class="sb-mono" type="number" step="0.1" data-field="shippingMarkupPct" data-room="${room.id}" data-item="${it.id}" value="${round2(it.shippingMarkupPct)}"/></div>
               <div class="sb-drawer-field"><label>Ship Markup $</label><input class="sb-mono" type="number" step="0.01" data-field="shippingMarkupAmt" data-room="${room.id}" data-item="${it.id}" value="${round2(it.shippingMarkupAmt)}"/></div>
-              <div class="sb-drawer-field"><label>Client Shipping</label><span class="sb-computed-val">${money(clientShipping(it))}</span></div>
+              <div class="sb-drawer-field"><label>Client Shipping</label><span class="sb-computed-val" data-computed="clientShipping">${money(clientShipping(it))}</span></div>
             </div>
             <div class="sb-drawer-group">
               <div class="sb-drawer-group-label">Receiving</div>
               <div class="sb-drawer-field"><label>Receiving Cost</label><input class="sb-mono" type="number" min="0" step="0.01" data-field="receivingCost" data-room="${room.id}" data-item="${it.id}" value="${it.receivingCost}"/></div>
               <div class="sb-drawer-field"><label>Receiving Markup %</label><input class="sb-mono" type="number" step="0.1" data-field="receivingMarkupPct" data-room="${room.id}" data-item="${it.id}" value="${round2(it.receivingMarkupPct)}"/></div>
-              <div class="sb-drawer-field"><label>Client Receiving</label><span class="sb-computed-val">${money(clientReceiving(it))}</span></div>
+              <div class="sb-drawer-field"><label>Client Receiving</label><span class="sb-computed-val" data-computed="clientReceiving">${money(clientReceiving(it))}</span></div>
             </div>
             <div class="sb-drawer-group">
               <div class="sb-drawer-group-label">Notes</div>
               <textarea data-field="notes" data-room="${room.id}" data-item="${it.id}" placeholder="Internal notes...">${escapeHtmlLite(it.notes)}</textarea>
             </div>
             <div class="sb-drawer-summary">
-              <span>TOTAL COST (ALL-IN) <b>${money(totalCostAllIn(it))}</b></span>
-              <span>TOTAL CLIENT (ALL-IN) <b>${money(totalClientAllIn(it))}</b></span>
-              <span>PROFIT <span class="${profitCls}">${money(profitAmt(it))}</span></span>
-              <span>MARGIN <span class="${profitCls}">${round2(profitMarginPct(it))}%</span></span>
+              <span>TOTAL COST (ALL-IN) <b data-computed="totalCostAllIn">${money(totalCostAllIn(it))}</b></span>
+              <span>TOTAL CLIENT (ALL-IN) <b data-computed="totalClientAllIn">${money(totalClientAllIn(it))}</b></span>
+              <span>PROFIT <span class="${profitCls}" data-computed="profitAmt">${money(profitAmt(it))}</span></span>
+              <span>MARGIN <span class="${profitCls}" data-computed="profitMarginPct">${round2(profitMarginPct(it))}%</span></span>
             </div>
           </div></td>`;
           tbody.appendChild(drawerTr);
@@ -311,9 +321,57 @@
   }
   function escapeHtmlLite(s){ return (s===undefined||s===null?'':String(s)).replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+  function thumbHtml(it){
+    return it.imageUrl
+      ? `<img src="${escapeAttr(proxiedImg(it.imageUrl))}" alt="" referrerpolicy="no-referrer" loading="lazy" onerror="this.parentElement.querySelector('.sb-thumb-ph').style.display='flex';this.style.display='none';"/><span class="sb-thumb-ph" style="display:none;">&mdash;</span>`
+      : '<span class="sb-thumb-ph">&mdash;</span>';
+  }
+  function linkHtml(it){
+    return it.sourceUrl
+      ? `<a class="sb-link has-url" href="${escapeAttr(it.sourceUrl)}" target="_blank" rel="noopener" title="Open product page">🔗</a>`
+      : `<span class="sb-link" title="Add a link below first">🔗</span>`;
+  }
+
+  // Updates just the read-only computed values for one row (and its pricing drawer, if
+  // open) in place — used while typing so we never rebuild the table and steal focus
+  // mid-keystroke the way a full render() would.
+  function updateComputedDisplay(it){
+    const totalEl = document.querySelector(`[data-total-cell="${it.id}"] .sb-row-total`);
+    if(totalEl) totalEl.textContent = money(totalClientAllIn(it));
+
+    const drawer = document.querySelector(`[data-drawer-for="${it.id}"]`);
+    if(!drawer) return;
+    const set = (key, val) => { const el = drawer.querySelector(`[data-computed="${key}"]`); if(el) el.textContent = val; };
+    set('clientPrice', money(clientPrice(it)));
+    set('lineTotalClient', money(lineTotalClient(it)));
+    set('tradeTaxAmt', money(tradeTaxAmt(it)));
+    set('clientTaxAmt', money(clientTaxAmt(it)));
+    set('clientShipping', money(clientShipping(it)));
+    set('clientReceiving', money(clientReceiving(it)));
+    set('totalCostAllIn', money(totalCostAllIn(it)));
+    set('totalClientAllIn', money(totalClientAllIn(it)));
+    const profitCls = profitAmt(it) >= 0 ? 'profit-pos' : 'profit-neg';
+    const profitEl = drawer.querySelector('[data-computed="profitAmt"]');
+    if(profitEl){ profitEl.textContent = money(profitAmt(it)); profitEl.className = profitCls; }
+    const marginEl = drawer.querySelector('[data-computed="profitMarginPct"]');
+    if(marginEl){ marginEl.textContent = round2(profitMarginPct(it)) + '%'; marginEl.className = profitCls; }
+  }
+
+  function updateFooterTotals(){
+    let totalItems = 0, totalClient = 0;
+    state.rooms.forEach(room => {
+      totalItems += room.items.length;
+      room.items.forEach(it => totalClient += totalClientAllIn(it));
+    });
+    document.getElementById('sb-count-rooms').textContent = state.rooms.length;
+    document.getElementById('sb-count-items').textContent = totalItems;
+    document.getElementById('sb-count-total').textContent = money(totalClient);
+  }
+
   const NUMERIC_FIELDS = ['qty','tradeCost','markupPct','markupAmt','tradeTaxPct','clientTaxPct',
     'shippingCost','shippingMarkupPct','shippingMarkupAmt','receivingCost','receivingMarkupPct'];
   const PRICING_TRIGGER_FIELDS = ['tradeCost','markupPct','markupAmt','shippingCost','shippingMarkupPct','shippingMarkupAmt','qty'];
+  const MARKUP_PAIRS = { markupPct:'markupAmt', markupAmt:'markupPct', shippingMarkupPct:'shippingMarkupAmt', shippingMarkupAmt:'shippingMarkupPct' };
 
   function scheduleItemSave(itemId){
     clearTimeout(itemSaveTimers.get(itemId));
@@ -344,8 +402,27 @@
       if(!it) return;
       if(f === 'includeOnInvoice') return; // handled on 'change'
       it[f] = NUMERIC_FIELDS.includes(f) ? (parseFloat(e.target.value)||0) : e.target.value;
-      if(PRICING_TRIGGER_FIELDS.includes(f)) recomputePricing(it, f);
-      render();
+      // Deliberately not calling render() here — it rebuilds the whole table and
+      // steals focus mid-keystroke, making it impossible to type multi-digit numbers.
+      // Only patch the specific bits of the DOM that actually need to change.
+      if(PRICING_TRIGGER_FIELDS.includes(f)){
+        recomputePricing(it, f);
+        updateComputedDisplay(it);
+        updateFooterTotals();
+        // The other half of a markup %/$ pair is itself an editable input showing a
+        // derived value — keep it in sync without touching whichever field is focused.
+        const pairField = MARKUP_PAIRS[f];
+        if(pairField){
+          const pairEl = document.querySelector(`[data-field="${pairField}"][data-item="${it.id}"]`);
+          if(pairEl) pairEl.value = round2(it[pairField]);
+        }
+      } else if(f === 'imageUrl'){
+        const thumb = document.querySelector(`[data-thumb-for="${it.id}"]`);
+        if(thumb) thumb.innerHTML = thumbHtml(it);
+      } else if(f === 'sourceUrl'){
+        const link = document.querySelector(`[data-link-for="${it.id}"]`);
+        if(link) link.innerHTML = linkHtml(it);
+      }
       scheduleItemSave(itemId);
     }
   });

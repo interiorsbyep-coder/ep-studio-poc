@@ -1,12 +1,39 @@
 const express = require('express');
 const pool = require('../db');
 const { loadFullSchedule } = require('./projects');
+const VENDOR_LIST = require('../data/vendors');
 
 const router = express.Router();
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const CATEGORIES = ["Upholstery", "Case Goods", "Lighting", "Rugs", "Accessories", "Window Treatments", "Other"];
 const STATUSES = ["Considering", "Proposed", "Approved", "Ordered", "Order Confirmed", "Backordered", "Shipped", "Received", "Installed", "Returned"];
+
+// Claude's web_search results rarely include a direct image URL, and when they do
+// it's sometimes a stale/hallucinated link (404s). Fetching the product page's own
+// Open Graph image reflects what's actually live on the page right now, so callers
+// should prefer this over whatever imageUrl the model reported and only fall back
+// to the model's guess if the page can't be scraped (bot-blocked, JS-rendered, etc).
+async function fetchOgImage(url) {
+  if (!url || !/^https?:\/\//i.test(url)) return '';
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; EPStudioSuite/1.0)' }
+    });
+    clearTimeout(timeout);
+    if (!response.ok) return '';
+    const html = await response.text();
+    const match = html.match(/<meta[^>]+(?:property|name)=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']og:image["']/i);
+    if (!match) return '';
+    try { return new URL(match[1], url).href; } catch (e) { return match[1]; }
+  } catch (err) {
+    return '';
+  }
+}
 
 async function ensureRoom(projectId, name) {
   const clean = (name || '').trim() || 'General';
@@ -25,8 +52,8 @@ async function ensureRoom(projectId, name) {
 async function insertItem(roomId, raw, sourceUrlOverride) {
   await pool.query(
     `INSERT INTO items (room_id, category, item, vendor, sku, finish, dims, qty,
-       trade_cost, markup_pct, lead_time, status, image_url, source_url)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+       trade_cost, markup_pct, lead_time, status, image_url, source_url, notes)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
     [
       roomId,
       CATEGORIES.includes(raw.category) ? raw.category : 'Other',
@@ -41,7 +68,8 @@ async function insertItem(roomId, raw, sourceUrlOverride) {
       raw.leadTime || 'TBD',
       STATUSES.includes(raw.status) ? raw.status : 'Considering',
       raw.imageUrl || '',
-      sourceUrlOverride !== undefined ? sourceUrlOverride : (raw.sourceUrl || '')
+      sourceUrlOverride !== undefined ? sourceUrlOverride : (raw.sourceUrl || ''),
+      raw.notes || ''
     ]
   );
 }
@@ -95,6 +123,7 @@ router.post('/generate-schedule', async (req, res) => {
     const items = JSON.parse(clean);
 
     for (const raw of items) {
+      if (raw.sourceUrl) raw.imageUrl = (await fetchOgImage(raw.sourceUrl)) || raw.imageUrl || '';
       const roomId = await ensureRoom(projectId, raw.room);
       await insertItem(roomId, raw);
     }
@@ -148,6 +177,8 @@ router.post('/quick-add', async (req, res) => {
       throw new Error('response was cut off before valid JSON completed — try again, the page may be slow to search');
     }
 
+    raw.imageUrl = (await fetchOgImage(url)) || raw.imageUrl || '';
+
     const roomId = await ensureRoom(projectId, room || raw.room);
     await insertItem(roomId, raw, url);
 
@@ -156,6 +187,150 @@ router.post('/quick-add', async (req, res) => {
     res.json(schedule);
   } catch (err) {
     res.status(500).json({ error: "Couldn't pull details from that link (" + err.message + "). Try again, or add the item by hand." });
+  }
+});
+
+router.post('/sourcing-search', async (req, res) => {
+  if (!ANTHROPIC_API_KEY) {
+    return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not set on the server.' });
+  }
+  const { query, budget, lead, category, tier } = req.body;
+  if (!query || typeof query !== 'string' || !query.trim()) {
+    return res.status(400).json({ error: 'Missing "query" in request body.' });
+  }
+
+  let constraints = query;
+  if (budget) constraints += `. Max budget: $${budget}.`;
+  if (lead) constraints += ` Max lead time: ${lead} weeks.`;
+  if (category) constraints += ` Category: ${category}.`;
+
+  let vendorConstraint = '';
+  if (tier) {
+    const allowedVendors = VENDOR_LIST.filter(v => v[1] === String(tier)).map(v => v[0]);
+    vendorConstraint = `\n\nIMPORTANT VENDOR RESTRICTION: Only suggest products from these approved vendors (Tier ${tier}) — do not suggest any vendor not on this list, even if it seems like a good fit:\n${allowedVendors.join(", ")}`;
+  }
+
+  const prompt = `You are a product sourcing assistant for interior designers. Search the web for real, currently available products matching this request:
+
+"${constraints}"${vendorConstraint}
+
+Find up to 10 strong candidate products from real retailers or trade vendors${tier ? ' — strictly from the approved vendor list above' : ''} (fewer is fine if you genuinely can't find that many good matches, but don't stop early just because the brief is specific — a specific brief like an exact size or color combo usually still has several real matches, so keep searching before settling for a short list). For each, return a JSON object with:
+{"name":string,"vendor":string,"price":string (e.g. "$2,450" or "Price on request"),"dims":string (key dimensions, e.g. 31"W x 31"D x 36"H),"leadTime":string (e.g. "8-10 wks" or "In stock"),"url":string (the real product page URL found via search),"imageUrl":string (a direct image URL if one appears in the search results, else empty string),"fitNotes":string (under 15 words on why it fits the brief)}
+${tier ? '\nIf you cannot find enough real products from the approved vendor list, return fewer results rather than including a vendor not on the list.' : ''}
+Return ONLY a valid minified JSON array of these objects, no markdown fences, no commentary, no text before or after.`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 3000,
+        messages: [{ role: 'user', content: prompt }],
+        tools: [{ type: 'web_search_20250305', name: 'web_search' }]
+      })
+    });
+    if (!response.ok) {
+      const errText = await response.text();
+      return res.status(response.status).json({ error: `Anthropic API error: ${errText}` });
+    }
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message || 'API error');
+    const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text || '').join('');
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    const raw = jsonMatch ? jsonMatch[0] : text.replace(/```json|```/g, '').trim();
+    const items = JSON.parse(raw).map((it, i) => ({ ...it, id: 'sp' + Date.now() + '_' + i }));
+    await Promise.all(items.map(async it => {
+      if (it.url) it.imageUrl = (await fetchOgImage(it.url)) || it.imageUrl || '';
+    }));
+    res.json({ items });
+  } catch (err) {
+    res.status(500).json({ error: "Couldn't complete that search — try rephrasing with fewer constraints and search again. (" + err.message + ")" });
+  }
+});
+
+router.post('/add-to-schedule', async (req, res) => {
+  const { projectId, item } = req.body;
+  if (!projectId || !item || typeof item !== 'object') {
+    return res.status(400).json({ error: 'Missing "projectId" or "item" in request body.' });
+  }
+  try {
+    const priceNum = parseFloat(String(item.price || '').replace(/[^0-9.]/g, '')) || 0;
+    const roomId = await ensureRoom(projectId, 'General');
+    await insertItem(roomId, {
+      category: 'Other',
+      item: item.name || '',
+      vendor: item.vendor || '',
+      dims: item.dims || '',
+      leadTime: item.leadTime || '',
+      tradeCost: priceNum,
+      markupPct: 0,
+      imageUrl: item.imageUrl || '',
+      sourceUrl: item.url || '',
+      notes: item.fitNotes || ''
+    }, item.url || '');
+
+    const schedule = await loadFullSchedule(projectId);
+    if (!schedule) return res.status(404).json({ error: 'Project not found.' });
+    res.json(schedule);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+const TEAR_SHEET_PROMPT = (raw, room, loc) => `You are a tear sheet assistant for an interior design studio. Given the input below (a product URL, or a row/description from an FF&E schedule), produce the content for one client-facing tear sheet. If it's a URL, search the web for the real product details.
+
+INPUT: "${raw}"
+${room ? `ROOM (use this if given): ${room}` : ''}
+${loc ? `INSTALL LOCATION (use this if given): ${loc}` : ''}
+
+Return ONLY a single valid minified JSON object, no markdown fences, no commentary:
+{"itemName":string,"room":string,"category":one of ["Upholstery","Case Goods","Lighting","Rugs","Accessories","Window Treatments","Other"],"installLocation":string,"dimensions":string,"materialFinish":string,"quantity":string,"investment":string (e.g. "$3,760" or "Pricing on request"),"leadTime":string,"designerNotes":string (2-3 sentences, warm and specific, in a designer's voice explaining why this piece was selected),"imageUrl":string (a direct image URL if one appears in search results, else empty string)}
+
+Use "TBD" for unknown string fields. Output the JSON object and nothing else.`;
+
+router.post('/tear-sheet', async (req, res) => {
+  if (!ANTHROPIC_API_KEY) {
+    return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not set on the server.' });
+  }
+  const { raw, room, loc } = req.body;
+  if (!raw || typeof raw !== 'string' || !raw.trim()) {
+    return res.status(400).json({ error: 'Missing "raw" in request body.' });
+  }
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: TEAR_SHEET_PROMPT(raw, room, loc) }],
+        tools: [{ type: 'web_search_20250305', name: 'web_search' }]
+      })
+    });
+    if (!response.ok) {
+      const errText = await response.text();
+      return res.status(response.status).json({ error: `Anthropic API error: ${errText}` });
+    }
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message || 'API error');
+    const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text || '').join('');
+    const match = text.match(/\{[\s\S]*\}/);
+    const jsonStr = match ? match[0] : text.replace(/```json|```/g, '').trim();
+    const item = JSON.parse(jsonStr);
+    if (/^https?:\/\//i.test(raw.trim())) item.imageUrl = (await fetchOgImage(raw.trim())) || item.imageUrl || '';
+    res.json({ item: { ...item, room: room || item.room, installLocation: loc || item.installLocation } });
+  } catch (err) {
+    res.status(500).json({ error: "Couldn't build that tear sheet — try a more specific product link or description, then generate again. (" + err.message + ")" });
   }
 });
 

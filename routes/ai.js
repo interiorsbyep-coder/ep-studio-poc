@@ -214,7 +214,7 @@ router.post('/sourcing-search', async (req, res) => {
 
 "${constraints}"${vendorConstraint}
 
-Find up to 10 strong candidate products from real retailers or trade vendors${tier ? ' — strictly from the approved vendor list above' : ''} (fewer is fine if you genuinely can't find that many good matches, but don't stop early just because the brief is specific — a specific brief like an exact size or color combo usually still has several real matches, so keep searching before settling for a short list). For each, return a JSON object with:
+Find up to 8 strong candidate products from real retailers or trade vendors${tier ? ' — strictly from the approved vendor list above' : ''}. Be efficient with searching — use at most 4-5 web searches total, and pull several different candidate products out of each search's results rather than running a separate search per item. Fewer than 8 results is fine if you genuinely can't find that many good matches. For each, return a JSON object with:
 {"name":string,"vendor":string,"price":string (e.g. "$2,450" or "Price on request"),"dims":string (key dimensions, e.g. 31"W x 31"D x 36"H),"leadTime":string (e.g. "8-10 wks" or "In stock"),"url":string (the real product page URL found via search),"imageUrl":string (a direct image URL if one appears in the search results, else empty string),"fitNotes":string (under 15 words on why it fits the brief)}
 ${tier ? '\nIf you cannot find enough real products from the approved vendor list, return fewer results rather than including a vendor not on the list.' : ''}
 Return ONLY a valid minified JSON array of these objects, no markdown fences, no commentary, no text before or after.`;
@@ -235,8 +235,9 @@ Return ONLY a valid minified JSON array of these objects, no markdown fences, no
       })
     });
     if (!response.ok) {
-      const errText = await response.text();
-      return res.status(response.status).json({ error: `Anthropic API error: ${errText}` });
+      const errBody = await response.json().catch(() => null);
+      const msg = errBody && errBody.error && errBody.error.message;
+      return res.status(response.status).json({ error: msg || `Anthropic API error (HTTP ${response.status})` });
     }
     const data = await response.json();
     if (data.error) throw new Error(data.error.message || 'API error');
@@ -249,7 +250,7 @@ Return ONLY a valid minified JSON array of these objects, no markdown fences, no
     }));
     res.json({ items });
   } catch (err) {
-    res.status(500).json({ error: "Couldn't complete that search — try rephrasing with fewer constraints and search again. (" + err.message + ")" });
+    res.status(500).json({ error: "That search didn't come back cleanly — this is usually a transient hiccup, not your query. Try searching again. (" + err.message + ")" });
   }
 });
 

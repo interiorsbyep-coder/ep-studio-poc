@@ -2,24 +2,9 @@ const express = require('express');
 const pool = require('../db');
 const { loadFullSchedule, itemsForProject } = require('./projects');
 const asyncHandler = require('./asyncHandler');
+const { invoiceLineTotal, costTotal, receivingCostTotal } = require('./pricing');
 
 const router = express.Router();
-
-// Mirrors the pricing math in public/js/schedule-builder.js — kept as small,
-// duplicated functions here since this is the server's authoritative computation
-// for invoice/PO totals at the moment they're created, not a live display.
-function clientPrice(it) { return (it.tradeCost || 0) + (it.markupAmt || 0); }
-function clientShipping(it) { return (it.shippingCost || 0) + (it.shippingMarkupAmt || 0); }
-function receivingCostTotal(it) { return (it.receivingCost || 0) * (it.qty || 0); }
-function clientReceiving(it) { return receivingCostTotal(it) * (1 + (it.receivingMarkupPct || 0) / 100); }
-function lineTotalClient(it) { return clientPrice(it) * (it.qty || 0); }
-function clientTaxAmt(it) { return lineTotalClient(it) * (it.clientTaxPct || 0) / 100; }
-function invoiceLineTotal(it) { return lineTotalClient(it) + clientTaxAmt(it) + clientShipping(it) + clientReceiving(it); }
-function costTotal(it) {
-  const tradeLineTotal = (it.tradeCost || 0) * (it.qty || 0);
-  const tradeTax = tradeLineTotal * (it.tradeTaxPct || 0) / 100;
-  return tradeLineTotal + tradeTax + (it.shippingCost || 0) + receivingCostTotal(it);
-}
 
 function genNumber(prefix) {
   const datePart = new Date().toISOString().slice(2, 10).replace(/-/g, '');
@@ -39,11 +24,38 @@ router.get('/projects/:projectId/invoice-candidates', asyncHandler(async (req, r
 
 router.get('/projects/:projectId/invoices', asyncHandler(async (req, res) => {
   const result = await pool.query(
-    `SELECT id, invoice_number AS "invoiceNumber", date, total, item_count AS "itemCount"
+    `SELECT id, invoice_number AS "invoiceNumber", date, total, item_count AS "itemCount",
+            paid_amount AS "paidAmount", paid_at AS "paidAt",
+            qb_invoice_id AS "qbInvoiceId", qb_synced_at AS "qbSyncedAt"
      FROM invoices WHERE project_id = $1 ORDER BY id`,
     [req.params.projectId]
   );
   res.json(result.rows);
+}));
+
+// Payments are additive (not a single "mark as paid" flag) since real payments often
+// arrive in parts — a deposit, then a balance — rather than all at once.
+router.post('/invoices/:id/payments', asyncHandler(async (req, res) => {
+  const amount = Number(req.body.amount) || 0;
+  if (amount <= 0) {
+    return res.status(400).json({ error: 'Payment amount must be greater than zero.' });
+  }
+  const result = await pool.query(
+    `UPDATE invoices SET paid_amount = paid_amount + $1, paid_at = now()
+     WHERE id = $2
+     RETURNING id, invoice_number AS "invoiceNumber", date, total, item_count AS "itemCount",
+               paid_amount AS "paidAmount", paid_at AS "paidAt"`,
+    [amount, req.params.id]
+  );
+  if (!result.rows.length) return res.status(404).json({ error: 'Invoice not found.' });
+  res.json(result.rows[0]);
+}));
+
+// Items are looked up by their stamped invoicedId/poId rather than a stored id array —
+// that link is already the source of truth, so there's nothing extra to keep in sync.
+router.get('/projects/:projectId/invoices/:invoiceNumber/items', asyncHandler(async (req, res) => {
+  const items = await itemsForProject(req.params.projectId, 'AND items.invoiced_id = $2', [req.params.invoiceNumber]);
+  res.json({ items: items.map(it => ({ ...it, lineTotal: invoiceLineTotal(it) })) });
 }));
 
 router.post('/projects/:projectId/invoices', asyncHandler(async (req, res) => {
@@ -96,6 +108,11 @@ router.get('/projects/:projectId/purchase-orders', asyncHandler(async (req, res)
   res.json(result.rows);
 }));
 
+router.get('/projects/:projectId/purchase-orders/:poNumber/items', asyncHandler(async (req, res) => {
+  const items = await itemsForProject(req.params.projectId, 'AND items.po_id = $2', [req.params.poNumber]);
+  res.json({ items: items.map(it => ({ ...it, costTotal: costTotal(it) })) });
+}));
+
 router.post('/projects/:projectId/purchase-orders', asyncHandler(async (req, res) => {
   const projectId = req.params.projectId;
   const { vendor } = req.body;
@@ -142,7 +159,7 @@ router.get('/projects/:projectId/tracked-items', asyncHandler(async (req, res) =
 
 async function getFinanceBundle(projectId) {
   const [invoices, purchaseOrders, manualEntries, onOrderItems] = await Promise.all([
-    pool.query('SELECT id, invoice_number AS "invoiceNumber", date, total, item_count AS "itemCount" FROM invoices WHERE project_id = $1 ORDER BY id', [projectId]),
+    pool.query('SELECT id, invoice_number AS "invoiceNumber", date, total, item_count AS "itemCount", paid_amount AS "paidAmount", paid_at AS "paidAt" FROM invoices WHERE project_id = $1 ORDER BY id', [projectId]),
     pool.query('SELECT id, po_number AS "poNumber", vendor, date, total, item_count AS "itemCount" FROM purchase_orders WHERE project_id = $1 ORDER BY id', [projectId]),
     pool.query('SELECT id, category, description, type, amount, date FROM finance_entries WHERE project_id = $1 ORDER BY id', [projectId]),
     itemsForProject(projectId, "AND items.po_id != ''")

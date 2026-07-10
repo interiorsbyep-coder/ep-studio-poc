@@ -10,22 +10,25 @@
 
 <div class="app-header">
   <img src="/assets/crest.png" alt="E.P. Interiors crest"/>
-  <div class="app-header-name">E.P. Interiors &nbsp;&middot;&nbsp; Thoughtful Spaces, Intentional Living</div>
+  <div class="app-header-name">
+    <span class="app-header-brand">E.P. Interiors</span>
+    <span class="app-header-tagline">Thoughtful Spaces, Intentional Living</span>
+  </div>
 </div>
 
 <nav class="app-tabs">
-  <button class="app-tab active" data-tab="schedule-builder">Schedule Builder</button>
+  <button class="app-tab active" data-tab="business-overview">Business Overview</button>
+  <button class="app-tab" data-tab="schedule-builder">Schedule Builder</button>
   <button class="app-tab" data-tab="sourcing-specialist">Sourcing Specialist</button>
   <button class="app-tab" data-tab="tear-sheet-builder">Tear Sheet Builder</button>
-  <button class="app-tab" data-tab="order-tracker">Order Tracker</button>
   <button class="app-tab" data-tab="invoice-creator">Invoice Creator</button>
   <button class="app-tab" data-tab="purchase-orders">Purchase Orders</button>
+  <button class="app-tab" data-tab="order-tracker">Order Tracker</button>
   <button class="app-tab" data-tab="income-expense">Income &amp; Expense</button>
-  <button class="app-tab" data-tab="business-overview">Business Overview</button>
 </nav>
 
 <main class="app-main">
-<section class="app-panel active" data-panel="schedule-builder">
+<section class="app-panel" data-panel="schedule-builder">
   <div class="sb-root" id="sb-root">
     <div class="sb-eyebrow">FF&amp;E Schedule Builder</div>
     <div class="sb-title">Your Schedule</div>
@@ -158,7 +161,7 @@
   <div class="tb-root">
     <div class="tb-eyebrow">Tear Sheet Builder</div>
     <div class="tb-title">Your Tear Sheet Generator</div>
-    <div class="tb-sub">Drop in a product URL or pull an item straight from your FF&amp;E schedule. It produces a branded, client-ready tear sheet — the deliverable that used to eat your afternoon, built in seconds.</div>
+    <div class="tb-sub">Drop in a product URL or pull an item straight from your FF&amp;E schedule. Builds a compact, client-ready grid you can share as a link for approval and signature, or print/export as a PDF.</div>
 
     <div class="tb-meta tb-noprint">
       <span>PROJECT</span>
@@ -174,7 +177,6 @@
           <label>Item</label>
           <select id="tb-schedule-select"><option value="">No items found — check Schedule Builder first</option></select>
         </div>
-        <div class="tb-field"><label>Install location</label><input id="tb-schedule-loc" placeholder="e.g. Facing pair, center of room"/></div>
       </div>
       <div class="tb-panel-actions">
         <button class="tb-btn" id="tb-schedule-generate">Generate from this item</button>
@@ -187,7 +189,6 @@
       <textarea id="tb-input" placeholder='e.g. "https://www.verellen.us/victoria-swivel-glider" or a row like: Living Room — Infiniti 88" Curve Back Sofa, 2 facing, performance fabric TBD, 8-10 wk lead time'></textarea>
       <div class="tb-row">
         <div class="tb-field"><label>Room</label><input id="tb-room" placeholder="e.g. Living Room"/></div>
-        <div class="tb-field"><label>Install location</label><input id="tb-loc" placeholder="e.g. Facing pair, center of room"/></div>
       </div>
       <div class="tb-panel-actions">
         <button class="tb-btn" id="tb-generate">Generate tear sheet</button>
@@ -197,11 +198,18 @@
     </div>
 
     <div id="tb-empty" class="tb-empty">No tear sheets yet — pick an item from Schedule, or paste a product URL / row above to build your first one.</div>
-    <div id="tb-sheets"></div>
+    <div id="tb-sheets" class="ts-share-grid"></div>
 
-    <div class="tb-panel-actions tb-noprint" id="tb-footer" style="display:none;justify-content:center;">
+    <div class="tb-panel-actions tb-noprint" id="tb-footer" style="display:none;justify-content:center;flex-wrap:wrap;">
       <button class="tb-btn tb-btn-ghost" id="tb-print">Print / Save as PDF</button>
+      <button class="tb-btn" id="tb-share">Share for signature</button>
     </div>
+    <div class="tb-mono" id="tb-share-msg" style="font-size:12px;color:var(--success);display:none;margin-top:10px;"></div>
+    <div class="tb-error" id="tb-share-error" style="display:none;margin-top:10px;"></div>
+
+    <div class="tb-section-label" style="margin-top:30px;">Sent for signature — this project</div>
+    <div id="tb-share-history-empty" class="tb-empty">Nothing sent yet — build a set of tear sheets above, then click "Share for signature."</div>
+    <div id="tb-share-history-wrap"></div>
   </div>
 </section>
 
@@ -230,6 +238,9 @@
     <div class="iv-mono" id="iv-status-msg" style="font-size:12px;color:var(--success);display:none;margin-bottom:10px;"></div>
 
     <div class="iv-section-label">Invoice history — this project</div>
+    <div class="iv-toolbar">
+      <button class="iv-btn iv-btn-ghost iv-btn-sm" id="iv-qb-sync" type="button">↻ Sync payments from QuickBooks</button>
+    </div>
     <div id="iv-history-empty" class="iv-empty">No invoices created yet.</div>
     <div id="iv-history-wrap"></div>
   </div>
@@ -326,13 +337,56 @@
         <option value="Expense">Expense</option>
       </select>
       <input type="text" id="ie-manual-desc" placeholder="Description — e.g. Design fee, initial retainer"/>
+      <input type="text" id="ie-manual-category" placeholder="Category (optional — e.g. Marketing)"/>
       <input type="number" id="ie-manual-amount" placeholder="Amount" min="0" step="0.01"/>
       <button class="ie-btn ie-btn-sm" id="ie-manual-add">Add</button>
     </div>
+    <div class="ie-sub" style="margin:6px 0 0;font-size:12px;">Tip: to track spend against a Business Overview budget bucket, set this entry's category to match the bucket's name exactly (e.g. "Marketing").</div>
 
     <div class="ie-section-label">All entries</div>
     <div id="ie-empty" class="ie-empty">Nothing yet — refresh from Invoices &amp; POs, or add a manual entry above.</div>
     <div id="ie-table-wrap"></div>
+  </div>
+</section>
+
+<section class="app-panel active" data-panel="business-overview">
+  <div class="bo-root">
+    <div class="bo-eyebrow">Business Overview</div>
+    <div class="bo-title">Across All Projects</div>
+    <div class="bo-sub">A studio-wide rollup, not scoped to any one project — computed directly from Studio Suite's own data, the way the "Key Metrics" tab in your Business Tracker sheet works.</div>
+
+    <div class="bo-toolbar">
+      <button class="bo-btn bo-btn-ghost" id="bo-refresh">↻ Refresh</button>
+    </div>
+    <div class="bo-error" id="bo-error" style="display:none;"></div>
+
+    <div class="bo-stats">
+      <div class="bo-stat"><div class="bo-stat-label">Active Projects</div><div class="bo-stat-value" id="bo-active-projects">0</div></div>
+      <div class="bo-stat"><div class="bo-stat-label">Total Pipeline Budget</div><div class="bo-stat-value" id="bo-pipeline">$0</div></div>
+      <div class="bo-stat"><div class="bo-stat-label">Total Invoiced All-Time</div><div class="bo-stat-value" id="bo-invoiced">$0</div></div>
+      <div class="bo-stat"><div class="bo-stat-label">Total Received (Payments)</div><div class="bo-stat-value" id="bo-received">$0</div></div>
+      <div class="bo-stat"><div class="bo-stat-label">Total Spent</div><div class="bo-stat-value" id="bo-spent">$0</div></div>
+      <div class="bo-stat net"><div class="bo-stat-label">Net Cash Position</div><div class="bo-stat-value" id="bo-net">$0</div></div>
+    </div>
+    <div class="bo-sub" style="margin-top:-14px;">Total Invoiced is what's been billed; Total Received is what's actually been paid (record payments on the Invoice Creator tab). Net Cash Position = Total Received − Total Spent — real money in minus real money out, not just billed revenue.</div>
+
+    <div class="bo-section-label">Budget allocation</div>
+    <div class="bo-sub" style="margin-top:-6px;">Set aside a % of total income per bucket (e.g. Marketing, Profit, Tax Reserve). Actual is pulled from manual expense entries whose category matches the bucket name, across every project. For a full formal budget, QuickBooks Online's budgeting tools are a better fit than this quick allocation view.</div>
+    <div id="bo-buckets-empty" class="bo-empty">No budget buckets yet — add one below.</div>
+    <div id="bo-buckets-wrap"></div>
+
+    <div class="bo-manual-row">
+      <input type="text" id="bo-bucket-name" placeholder="Bucket name — e.g. Marketing"/>
+      <input type="number" id="bo-bucket-pct" placeholder="%" min="0" max="100" step="0.1"/>
+      <button class="bo-btn bo-btn-sm" id="bo-bucket-add">Add bucket</button>
+    </div>
+
+    <div class="bo-section-label" style="margin-top:30px;">QuickBooks</div>
+    <div class="bo-sub" style="margin-top:-6px;" id="bo-qb-status">Checking connection…</div>
+    <div class="bo-toolbar">
+      <button class="bo-btn" id="bo-qb-connect" style="display:none;">Connect to QuickBooks</button>
+      <button class="bo-btn bo-btn-ghost" id="bo-qb-disconnect" style="display:none;">Disconnect</button>
+    </div>
   </div>
 </section>
 </main>
@@ -344,6 +398,7 @@
 <script src="/js/purchase-orders.js"></script>
 <script src="/js/order-tracker.js"></script>
 <script src="/js/income-expense.js"></script>
+<script src="/js/business-overview.js"></script>
 <script src="/js/app-shell.js"></script>
 </body>
 </html>

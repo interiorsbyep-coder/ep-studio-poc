@@ -13,6 +13,7 @@
   let idSeed = 1;
   const uid = () => 't' + Date.now() + '_' + (idSeed++);
   let scheduleItems = []; // flattened {room, ...item} from the current project's schedule
+  let shareHistory = [];
 
   async function api(path, options){
     const res = await fetch(path, Object.assign({ headers: {'Content-Type':'application/json'} }, options));
@@ -38,55 +39,29 @@
     const wrap = document.getElementById('tb-sheets');
     const empty = document.getElementById('tb-empty');
     const footer = document.getElementById('tb-footer');
-    wrap.innerHTML = '';
     empty.style.display = sheets.length ? 'none' : 'block';
     footer.style.display = sheets.length ? 'flex' : 'none';
 
-    const project = document.getElementById('tb-project').value || 'Untitled Residence';
-    const date = document.getElementById('tb-date').value;
-
-    sheets.forEach(s => {
-      const controls = document.createElement('div');
-      controls.className = 'tb-sheet-controls tb-noprint';
-      controls.innerHTML = `<button class="tb-btn tb-btn-ghost tb-btn-sm" data-action="del" data-id="${s.id}">Remove</button>`;
-      wrap.appendChild(controls);
-
-      const card = document.createElement('div');
-      card.className = 'tb-sheet';
+    wrap.innerHTML = sheets.map(s => {
       const imgHtml = s.imageUrl
-        ? `<img src="${proxiedImg(s.imageUrl)}" alt="${escapeHtml(s.itemName)}" referrerpolicy="no-referrer" loading="lazy" onerror="this.parentElement.innerHTML='<div class=&quot;tb-ph&quot;>No image found —<br/>reference product page</div>'"/>`
-        : `<div class="tb-ph">No image found —<br/>reference product page</div>`;
-      card.innerHTML = `
-        <div class="tb-sheet-head">
-          <div class="tb-sheet-brand">
-            <img src="/assets/crest.png" alt="E.P. Interiors"/>
-            <div>
-              <div class="tb-sheet-brand-text">E.P. INTERIORS</div>
-              <div class="tb-sheet-brand-sub">Thoughtful Spaces, Intentional Living</div>
-            </div>
+        ? `<img src="${proxiedImg(s.imageUrl)}" alt="${escapeHtml(s.itemName)}" referrerpolicy="no-referrer" loading="lazy" onerror="this.parentElement.innerHTML='<div class=&quot;ts-share-ph&quot;>No image found</div>'"/>`
+        : `<div class="ts-share-ph">No image found</div>`;
+      return `
+      <div class="ts-share-card" data-sheet-id="${s.id}">
+        <div class="ts-share-card-img">${imgHtml}</div>
+        <div class="ts-share-card-body">
+          <div class="ts-share-card-eyebrow">${escapeHtml(s.room || 'General')}${s.category ? ' / ' + escapeHtml(s.category) : ''}</div>
+          <div class="ts-share-card-name" contenteditable="true" data-sheet-field="itemName">${escapeHtml(s.itemName)}</div>
+          <div class="ts-share-card-row"><span>Investment</span><b contenteditable="true" data-sheet-field="investment">${escapeHtml(s.investment || 'Pricing on request')}</b></div>
+          <div class="ts-share-card-row"><span>Dimensions</span><b contenteditable="true" data-sheet-field="dimensions">${escapeHtml(s.dimensions || 'TBD')}</b></div>
+          <div class="ts-share-card-row"><span>Lead Time</span><b contenteditable="true" data-sheet-field="leadTime">${escapeHtml(s.leadTime || 'TBD')}</b></div>
+          <div class="ts-share-card-desc" contenteditable="true" data-sheet-field="designerNotes">${escapeHtml(s.designerNotes || '')}</div>
+          <div class="ts-share-actions tb-noprint" style="margin-top:8px;">
+            <button class="tb-btn tb-btn-ghost tb-btn-sm" data-action="del" data-id="${s.id}" type="button">Remove</button>
           </div>
-          <div class="tb-sheet-meta-r">${escapeHtml(date)}<br/>${escapeHtml(project)}</div>
         </div>
-        <div class="tb-sheet-eyebrow">${escapeHtml(s.room || 'General')} / ${escapeHtml(s.category || 'Item')}</div>
-        <div class="tb-sheet-name" contenteditable="true">${escapeHtml(s.itemName)}</div>
-        <div class="tb-sheet-img">${imgHtml}</div>
-        <div class="tb-sheet-specs">
-          <div class="tb-spec-row"><div class="tb-spec-label">Project / Room</div><div class="tb-spec-value" contenteditable="true">${escapeHtml(project)} — ${escapeHtml(s.room||'')}</div></div>
-          <div class="tb-spec-row"><div class="tb-spec-label">Install Location</div><div class="tb-spec-value" contenteditable="true">${escapeHtml(s.installLocation||'TBD')}</div></div>
-          <div class="tb-spec-row"><div class="tb-spec-label">Dimensions</div><div class="tb-spec-value" contenteditable="true">${escapeHtml(s.dimensions||'TBD')}</div></div>
-          <div class="tb-spec-row"><div class="tb-spec-label">Material / Finish</div><div class="tb-spec-value" contenteditable="true">${escapeHtml(s.materialFinish||'TBD')}</div></div>
-          <div class="tb-spec-row"><div class="tb-spec-label">Quantity</div><div class="tb-spec-value" contenteditable="true">${escapeHtml(s.quantity||'1')}</div></div>
-          <div class="tb-spec-row"><div class="tb-spec-label">Investment</div><div class="tb-spec-value" contenteditable="true">${escapeHtml(s.investment||'Pricing on request')}</div></div>
-          <div class="tb-spec-row"><div class="tb-spec-label">Lead Time</div><div class="tb-spec-value" contenteditable="true">${escapeHtml(s.leadTime||'TBD')}</div></div>
-        </div>
-        <div class="tb-sheet-notes" contenteditable="true">${escapeHtml(s.designerNotes || 'Designer notes — click to add context on why this piece was selected.')}</div>
-        <div class="tb-sheet-approval">
-          <div class="tb-approval-line"><div class="line"></div><div class="cap">Client Approval</div></div>
-          <div class="tb-approval-line"><div class="line"></div><div class="cap">Date</div></div>
-        </div>
-      `;
-      wrap.appendChild(card);
-    });
+      </div>`;
+    }).join('');
   }
 
   document.getElementById('tb-sheets').addEventListener('click', e=>{
@@ -95,8 +70,17 @@
       render();
     }
   });
-  document.getElementById('tb-project').addEventListener('input', (e)=>{ e.target.dataset.touched = '1'; render(); });
-  document.getElementById('tb-date').addEventListener('input', render);
+  // contenteditable fields fire 'input' (and it bubbles), so one delegated listener
+  // keeps every card's edits synced back into `sheets` — otherwise they'd vanish
+  // the next time render() runs (e.g. on project/date change).
+  document.getElementById('tb-sheets').addEventListener('input', e=>{
+    const field = e.target.dataset.sheetField;
+    if(!field) return;
+    const card = e.target.closest('[data-sheet-id]');
+    const s = sheets.find(x => x.id === card.dataset.sheetId);
+    if(s){ s[field] = e.target.textContent; saveLS(LS_SHEETS_KEY, sheets); }
+  });
+  document.getElementById('tb-project').addEventListener('input', (e)=>{ e.target.dataset.touched = '1'; });
   document.getElementById('tb-print').addEventListener('click', ()=> window.print());
 
   document.getElementById('tb-generate').addEventListener('click', async ()=>{
@@ -160,6 +144,7 @@
   window.addEventListener('ep:project-changed', ()=>{
     document.getElementById('tb-project').removeAttribute('data-touched');
     populateScheduleSelect();
+    pullShareHistory();
   });
   document.getElementById('tb-schedule-refresh').addEventListener('click', populateScheduleSelect);
 
@@ -167,17 +152,13 @@
     const idx = document.getElementById('tb-schedule-select').value;
     if(idx === '' || !scheduleItems[idx]) return;
     const it = scheduleItems[idx];
-    const loc = document.getElementById('tb-schedule-loc').value.trim();
     const clientPrice = (it.tradeCost||0) + (it.markupAmt||0);
     sheets.push({
       id: uid(),
       itemName: it.item,
       room: it.room,
       category: it.category,
-      installLocation: loc || 'TBD',
       dimensions: it.dims || 'TBD',
-      materialFinish: it.finish || 'TBD',
-      quantity: String(it.qty || 1),
       investment: clientPrice ? ('$' + clientPrice.toLocaleString(undefined,{maximumFractionDigits:0})) : 'Pricing on request',
       leadTime: it.leadTime || 'TBD',
       designerNotes: it.notes || '',
@@ -186,6 +167,99 @@
     render();
   });
 
-  setTimeout(populateScheduleSelect, 300);
+  // ---- Share for signature ----
+
+  async function pullShareHistory(){
+    if(!window.EPCurrentProject) return;
+    try{
+      shareHistory = await api('/api/projects/' + window.EPCurrentProject.id + '/tear-sheet-shares');
+      renderShareHistory();
+    }catch(err){ /* non-fatal — history just stays stale */ }
+  }
+
+  function renderShareHistory(){
+    const wrap = document.getElementById('tb-share-history-wrap');
+    const empty = document.getElementById('tb-share-history-empty');
+    if(!wrap) return;
+    empty.style.display = shareHistory.length ? 'none' : 'block';
+    wrap.innerHTML = shareHistory.map(h => {
+      const origin = location.origin;
+      const url = origin + '/share/' + h.token;
+      const signed = !!h.signedAt;
+      return `
+      <div class="iv-history-item" data-token="${escapeHtml(h.token)}" style="cursor:pointer;flex-direction:column;align-items:stretch;">
+        <div style="display:flex;justify-content:space-between;align-items:center;width:100%;flex-wrap:wrap;gap:8px;">
+          <div>
+            <div class="iv-history-id">${escapeHtml(h.projectName || 'Proposal')} — ${h.items.length} item${h.items.length===1?'':'s'}</div>
+            <div class="iv-history-meta">${new Date(h.createdAt).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'})} · ${signed ? 'Signed by ' + escapeHtml(h.signerName) : 'Awaiting signature'} · click to view</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span class="sb-invoiced-badge" style="background:${signed?'var(--success)':'var(--muted)'};">${signed?'Signed':'Pending'}</span>
+            <button class="tb-btn tb-btn-ghost tb-btn-sm" data-action="copy-link" data-url="${escapeHtml(url)}" type="button">Copy link</button>
+          </div>
+        </div>
+        <div class="iv-history-detail" style="display:none;margin-top:12px;"></div>
+      </div>`;
+    }).join('');
+  }
+
+  document.getElementById('tb-share-history-wrap') && document.getElementById('tb-share-history-wrap').addEventListener('click', async e=>{
+    if(e.target.dataset.action === 'copy-link'){
+      navigator.clipboard.writeText(e.target.dataset.url).then(()=>{
+        const old = e.target.textContent; e.target.textContent = 'Copied!'; setTimeout(()=>e.target.textContent = old, 1400);
+      });
+      return;
+    }
+    const row = e.target.closest('[data-token]');
+    if(!row) return;
+    const detail = row.querySelector('.iv-history-detail');
+    if(detail.style.display === 'block'){ detail.style.display = 'none'; return; }
+    detail.style.display = 'block';
+    const h = shareHistory.find(x => x.token === row.dataset.token);
+    if(!h) return;
+    const signedHtml = h.signedAt
+      ? `<div style="margin-top:10px;"><b>Signature:</b><br/><img src="${h.signature}" style="max-width:240px;border:1px solid var(--border);border-radius:3px;background:#fff;margin-top:6px;"/></div>`
+      : '';
+    detail.innerHTML = `<div class="ts-share-grid" style="margin-bottom:0;">${h.items.map(it => `
+        <div class="ts-share-card">
+          <div class="ts-share-card-img">${it.imageUrl ? `<img src="${proxiedImg(it.imageUrl)}" referrerpolicy="no-referrer"/>` : `<div class="ts-share-ph">No image</div>`}</div>
+          <div class="ts-share-card-body">
+            <div class="ts-share-card-name">${escapeHtml(it.itemName)}${it.approved ? ' ✓' : ''}</div>
+            <div class="ts-share-card-row"><span>Investment</span><b>${escapeHtml(it.investment||'')}</b></div>
+          </div>
+        </div>`).join('')}</div>${signedHtml}`;
+  });
+
+  document.getElementById('tb-share').addEventListener('click', async ()=>{
+    const errEl = document.getElementById('tb-share-error');
+    const msgEl = document.getElementById('tb-share-msg');
+    errEl.style.display = 'none';
+    msgEl.style.display = 'none';
+    if(!sheets.length){
+      errEl.textContent = 'Add at least one item above before sharing.';
+      errEl.style.display = 'block';
+      return;
+    }
+    if(!window.EPCurrentProject){
+      errEl.textContent = "Can't tell which project is active — open Schedule Builder first.";
+      errEl.style.display = 'block';
+      return;
+    }
+    try{
+      const created = await api('/api/projects/' + window.EPCurrentProject.id + '/tear-sheet-shares', {
+        method:'POST',
+        body: JSON.stringify({ projectName: document.getElementById('tb-project').value || window.EPCurrentProject.name, items: sheets })
+      });
+      const url = location.origin + '/share/' + created.token;
+      msgEl.style.display = 'block';
+      msgEl.innerHTML = `Link created: <a href="${url}" target="_blank" rel="noopener">${url}</a>`;
+      await pullShareHistory();
+    }catch(err){
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+    }
+  });
+
+  setTimeout(()=>{ populateScheduleSelect(); pullShareHistory(); }, 300);
   render();
 })();

@@ -2,8 +2,13 @@ const express = require('express');
 const pool = require('../db');
 const { loadFullSchedule } = require('./projects');
 const asyncHandler = require('./asyncHandler');
+const RECEIVING_RATES = require('../data/receiving-rates');
 
 const router = express.Router();
+
+router.get('/receiving-rates', (req, res) => {
+  res.json(RECEIVING_RATES.map(([itemType, rate]) => ({ itemType, rate })));
+});
 
 // camelCase field name -> DB column, and whether it's numeric (for coercion).
 const ITEM_FIELDS = {

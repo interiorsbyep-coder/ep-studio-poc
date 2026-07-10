@@ -13,6 +13,9 @@ const { router: projectsRouter } = require('./routes/projects');
 const scheduleRouter = require('./routes/schedule');
 const aiRouter = require('./routes/ai');
 const financeRouter = require('./routes/finance');
+const businessRouter = require('./routes/business');
+const sharesRouter = require('./routes/shares');
+const quickbooksRouter = require('./routes/quickbooks');
 
 const app = express();
 app.use(express.json());
@@ -29,6 +32,17 @@ app.use('/api/projects', projectsRouter);
 app.use('/api', scheduleRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api', financeRouter);
+app.use('/api', businessRouter);
+app.use('/api', sharesRouter);
+app.use('/api', quickbooksRouter);
+
+// The client-facing signing page — deliberately outside the main app shell and
+// (for now, pending the security decision) not behind any login, since the
+// person opening it is a client, not a Studio Suite user. The token in the URL
+// is the only thing gating access to that one tear sheet's content.
+app.get('/share/:token', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'share.html'));
+});
 
 // The frontend calls THIS endpoint instead of api.anthropic.com directly.
 // The real API key lives only here, server-side — never sent to the browser.

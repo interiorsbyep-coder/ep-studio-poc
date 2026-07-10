@@ -89,6 +89,7 @@
   document.getElementById('ie-manual-add').addEventListener('click', async ()=>{
     const type = document.getElementById('ie-manual-type').value;
     const desc = document.getElementById('ie-manual-desc').value.trim();
+    const category = document.getElementById('ie-manual-category').value.trim();
     const amount = parseFloat(document.getElementById('ie-manual-amount').value)||0;
     const errEl = document.getElementById('ie-error');
     if(!desc || !amount){
@@ -101,7 +102,7 @@
       const bundle = await api('/api/projects/' + window.EPCurrentProject.id + '/finance-entries', {
         method:'POST',
         body: JSON.stringify({
-          category: type==='Income' ? 'Other Income' : 'Other Expense',
+          category: category || (type==='Income' ? 'Other Income' : 'Other Expense'),
           description: desc, type, amount,
           date: new Date().toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'})
         })
@@ -109,6 +110,7 @@
       entries = buildEntries(bundle);
       totalReceivingCost = Number(bundle.totalReceivingCost) || 0;
       document.getElementById('ie-manual-desc').value = '';
+      document.getElementById('ie-manual-category').value = '';
       document.getElementById('ie-manual-amount').value = '';
       render();
     }catch(err){

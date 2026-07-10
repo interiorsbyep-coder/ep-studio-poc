@@ -108,11 +108,33 @@
     const empty = document.getElementById('po-history-empty');
     empty.style.display = history.length ? 'none' : 'block';
     wrap.innerHTML = history.slice().reverse().map(po => `
-      <div class="po-history-item">
-        <div><div class="po-history-id">${escapeHtml(po.poNumber)}</div><div class="po-history-meta">${escapeHtml(po.vendor)} · ${escapeHtml(po.date)} · ${po.itemCount} item${po.itemCount===1?'':'s'}</div></div>
-        <div class="po-mono" style="font-weight:700;">${money(po.total)}</div>
+      <div class="po-history-item" data-po="${escapeHtml(po.poNumber)}" style="cursor:pointer;flex-direction:column;align-items:stretch;">
+        <div style="display:flex;justify-content:space-between;align-items:center;width:100%;">
+          <div><div class="po-history-id">${escapeHtml(po.poNumber)}</div><div class="po-history-meta">${escapeHtml(po.vendor)} · ${escapeHtml(po.date)} · ${po.itemCount} item${po.itemCount===1?'':'s'} · click to view items</div></div>
+          <div class="po-mono" style="font-weight:700;">${money(po.total)}</div>
+        </div>
+        <div class="po-history-detail" style="display:none;margin-top:10px;"></div>
       </div>`).join('');
   }
+
+  document.getElementById('po-history-wrap').addEventListener('click', async e=>{
+    const row = e.target.closest('.po-history-item');
+    if(!row) return;
+    const detail = row.querySelector('.po-history-detail');
+    if(detail.style.display === 'block'){ detail.style.display = 'none'; return; }
+    detail.style.display = 'block';
+    if(detail.dataset.loaded) return;
+    detail.textContent = 'Loading…';
+    try{
+      const { items } = await api('/api/projects/' + window.EPCurrentProject.id + '/purchase-orders/' + row.dataset.po + '/items');
+      detail.innerHTML = `<table class="po-table"><thead><tr><th>Room</th><th>Item</th><th>SKU</th><th>Qty</th><th>Line Cost</th></tr></thead><tbody>
+        ${items.map(it=>`<tr><td>${escapeHtml(it.room)}</td><td>${escapeHtml(it.item)}</td><td class="po-mono">${escapeHtml(it.sku||'TBD')}</td><td class="po-mono">${it.qty}</td><td class="po-mono">${money(it.costTotal)}</td></tr>`).join('')}
+      </tbody></table>`;
+      detail.dataset.loaded = '1';
+    }catch(err){
+      detail.textContent = err.message;
+    }
+  });
 
   async function createPO(vendor){
     const items = groups[vendor].filter(it=>it._checked);

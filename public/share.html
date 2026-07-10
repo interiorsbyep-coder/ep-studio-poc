@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>E.P. Interiors — Product Approval</title>
+<link rel="stylesheet" href="/styles.css"/>
+</head>
+<body>
+
+<div class="ts-share-root" id="ts-share-root">
+  <div class="ts-share-header ts-noprint">
+    <img src="/assets/crest.png" alt="E.P. Interiors crest"/>
+    <div>
+      <div class="ts-share-brand">E.P. INTERIORS</div>
+      <div class="ts-share-brand-sub">Thoughtful Spaces, Intentional Living</div>
+    </div>
+  </div>
+
+  <div id="ts-share-loading" class="ts-share-loading">Loading…</div>
+  <div id="ts-share-error" class="ts-share-error" style="display:none;"></div>
+
+  <div id="ts-share-content" style="display:none;">
+    <div class="ts-share-title" id="ts-share-project-name"></div>
+    <div class="ts-share-sub">Please review the items below. Sign at the bottom to approve.</div>
+
+    <div class="ts-share-grid" id="ts-share-grid"></div>
+
+    <div class="ts-share-terms">
+      By signing below, I acknowledge that I have reviewed and approved all selections, specifications, quantities, finishes, dimensions, and associated pricing outlined in this proposal/presentation provided by E.P. Interiors, LLC. I understand that pricing, availability, and lead times are subject to change until items are purchased. I authorize E.P. Interiors, LLC to proceed with ordering the approved items on my behalf and understand that all purchases are considered final once orders have been placed with vendors and suppliers. I further acknowledge and agree to the following return and cancellation policy: E.P. Interiors, LLC follows all individual vendor and manufacturer return policies. Return eligibility cannot be guaranteed once items have been ordered. Any returned or canceled merchandise may be subject to vendor restocking fees, shipping charges, manufacturer penalties, and a 25% change order/processing fee assessed by E.P. Interiors, LLC. By signing below, I confirm that I understand and accept all selections, pricing, and terms outlined above.
+    </div>
+
+    <div class="ts-share-sign-block ts-noprint" id="ts-share-sign-block">
+      <div class="ts-share-section-label">Signature</div>
+      <input type="text" id="ts-share-signer-name" placeholder="Your full name"/>
+      <div class="ts-sig-wrap">
+        <canvas id="ts-sig-canvas" width="600" height="160"></canvas>
+        <div class="ts-sig-line">Sign above</div>
+      </div>
+      <div class="ts-share-actions">
+        <button class="ts-share-btn ts-share-btn-ghost" id="ts-sig-clear" type="button">Clear</button>
+        <button class="ts-share-btn" id="ts-share-submit" type="button">Sign &amp; Approve</button>
+      </div>
+      <div class="ts-share-error" id="ts-share-sign-error" style="display:none;"></div>
+    </div>
+
+    <div class="ts-share-signed-block" id="ts-share-signed-block" style="display:none;">
+      <div class="ts-share-section-label">Signed</div>
+      <div id="ts-share-signed-meta"></div>
+      <img id="ts-share-signature-img" alt="Signature"/>
+      <div class="ts-share-actions ts-noprint">
+        <button class="ts-share-btn ts-share-btn-ghost" id="ts-share-print" type="button">Download / Print as PDF</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/share.js"></script>
+</body>
+</html>

@@ -18,6 +18,7 @@
   let expandedItems = new Set();
   let projects = []; // [{id, name}]
   let currentProjectId = null;
+  let RECEIVING_RATES = []; // [{itemType, rate}] — the client's real receiving-rate table
   const itemSaveTimers = new Map();
 
   async function api(path, options){
@@ -134,6 +135,7 @@
       projects.push(p);
       currentProjectId = p.id;
       state = { rooms: [] };
+      populateClientInfo({});
       renderProjectSelect();
       render();
     });
@@ -301,6 +303,7 @@
             </div>
             <div class="sb-drawer-group">
               <div class="sb-drawer-group-label">Receiving</div>
+              <div class="sb-drawer-field"><label>Item Type</label><select data-receiving-rate-for="${it.id}" style="font-family:'Montserrat',sans-serif;"><option value="">Custom…</option>${RECEIVING_RATES.map(r=>`<option value="${r.rate}">${escapeAttr(r.itemType)}</option>`).join('')}</select></div>
               <div class="sb-drawer-field"><label>Receiving Cost / Unit</label><input class="sb-mono" type="number" min="0" step="0.01" data-field="receivingCost" data-room="${room.id}" data-item="${it.id}" value="${it.receivingCost}"/></div>
               <div class="sb-drawer-field"><label>Receiving Markup %</label><input class="sb-mono" type="number" step="0.1" data-field="receivingMarkupPct" data-room="${room.id}" data-item="${it.id}" value="${round2(it.receivingMarkupPct)}"/></div>
               <div class="sb-drawer-field"><label>Client Receiving</label><span class="sb-computed-val" data-computed="clientReceiving">${money(clientReceiving(it))}</span></div>
@@ -474,6 +477,14 @@
         catch(err){ showError('sb-error', err.message); }
       }
     }
+    if(e.target.dataset.receivingRateFor){
+      if(!e.target.value) return; // "Custom…" selected — leave the field as-is
+      const receivingInput = document.querySelector(`[data-field="receivingCost"][data-item="${e.target.dataset.receivingRateFor}"]`);
+      if(receivingInput){
+        receivingInput.value = e.target.value;
+        receivingInput.dispatchEvent(new Event('input', { bubbles:true }));
+      }
+    }
     if(e.target.dataset.moveRoom){
       const itemId = e.target.dataset.moveRoom;
       const roomName = e.target.value.trim();
@@ -604,6 +615,8 @@
       loading.style.display = 'none';
     }
   });
+
+  api('/api/receiving-rates').then(rates => RECEIVING_RATES = rates).catch(()=>{});
 
   initProjects().then(render).catch(err=>{
     console.error('Failed to load Schedule Builder:', err);
